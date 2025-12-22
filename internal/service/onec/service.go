@@ -162,17 +162,24 @@ func (s *Service) processRecord(ctx context.Context, workerID int, record *core.
 	timer := prometheus.NewTimer(metrics.WorkerDuration)
 	defer timer.ObserveDuration()
 
+	// Используем буфер из пула для десериализации (уменьшаем GC pressure)
+	buf := s.bufPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	defer s.bufPool.Put(buf)
+
 	var data models.AISDocument
-	rawJSON, err := json.Marshal(record.Get("payload"))
-	if err != nil {
-		log.Error().Err(err).Str("record_id", record.Id).Msg("Failed to marshal payload for validation")
-		s.markError(record, fmt.Errorf("payload marshal error: %w", err))
+	
+	// Кодируем map прямо в буфер из пула
+	if err := json.NewEncoder(buf).Encode(record.Get("payload")); err != nil {
+		log.Error().Err(err).Str("record_id", record.Id).Msg("Failed to encode payload from DB")
+		s.markError(record, fmt.Errorf("payload encode error: %w", err))
 		return
 	}
 
-	if err := json.Unmarshal(rawJSON, &data); err != nil {
-		log.Error().Err(err).Str("record_id", record.Id).Msg("Failed to unmarshal payload to AISDocument")
-		s.markError(record, fmt.Errorf("payload unmarshal error: %w", err))
+	// Декодируем из того же буфера в структуру
+	if err := json.NewDecoder(buf).Decode(&data); err != nil {
+		log.Error().Err(err).Str("record_id", record.Id).Msg("Failed to decode payload to AISDocument")
+		s.markError(record, fmt.Errorf("payload decode error: %w", err))
 		return
 	}
 
@@ -184,7 +191,7 @@ func (s *Service) processRecord(ctx context.Context, workerID int, record *core.
 
 	log.Info().Int("worker", workerID).Str("method", req.Method).Str("sale_id", req.Data.SaleId).Msg("Processing")
 
-	err = s.sendToOneC(ctx, req)
+	err := s.sendToOneC(ctx, req)
 
 	if err != nil {
 		log.Error().Err(err).Str("sale_id", req.Data.SaleId).Msg("Worker failed sync")
