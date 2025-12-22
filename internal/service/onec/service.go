@@ -18,7 +18,7 @@ import (
 	"github.com/pocketbase/pocketbase/core"
 	"github.com/rs/zerolog/log"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/pocketbase/dbx" // Добавили dbx
+	"github.com/pocketbase/dbx"
 )
 
 const (
@@ -90,10 +90,10 @@ func (s *Service) Push(req models.AISRequest) error {
 }
 
 func (s *Service) StartBackgroundWorker(ctx context.Context) {
-	for i := 0; i < WorkerCount; i++ {
+	for i := 0; i < s.cfg.WorkerCount; i++ {
 		go s.worker(ctx, i)
 	}
-	log.Info().Int("count", WorkerCount).Msg("Started 1C integration workers")
+	log.Info().Int("count", s.cfg.WorkerCount).Msg("Started 1C integration workers")
 	go s.dispatcher(ctx)
 }
 
@@ -113,8 +113,6 @@ func (s *Service) dispatcher(ctx context.Context) {
 }
 
 func (s *Service) fetchAndDispatch() {
-	// Метрика: Обновляем глубину очереди
-	// Используем dbx.NewExp для фильтрации
 	totalPending, err := s.app.CountRecords(CollectionQueue, dbx.NewExp("status = 'pending'"))
 	if err == nil {
 		metrics.QueueDepth.Set(float64(totalPending))
@@ -123,8 +121,8 @@ func (s *Service) fetchAndDispatch() {
 	records, err := s.app.FindRecordsByFilter(
 		CollectionQueue,
 		"status = 'pending'",
-		"-created",
-		BatchSize,
+		"",
+		s.cfg.BatchSize,
 		0,
 		nil,
 	)
@@ -162,11 +160,21 @@ func (s *Service) worker(ctx context.Context, id int) {
 
 func (s *Service) processRecord(ctx context.Context, workerID int, record *core.Record) {
 	timer := prometheus.NewTimer(metrics.WorkerDuration)
-	defer timer.ObserveDuration() 
+	defer timer.ObserveDuration()
 
 	var data models.AISDocument
-	rawJSON, _ := json.Marshal(record.Get("payload"))
-	json.Unmarshal(rawJSON, &data)
+	rawJSON, err := json.Marshal(record.Get("payload"))
+	if err != nil {
+		log.Error().Err(err).Str("record_id", record.Id).Msg("Failed to marshal payload for validation")
+		s.markError(record, fmt.Errorf("payload marshal error: %w", err))
+		return
+	}
+
+	if err := json.Unmarshal(rawJSON, &data); err != nil {
+		log.Error().Err(err).Str("record_id", record.Id).Msg("Failed to unmarshal payload to AISDocument")
+		s.markError(record, fmt.Errorf("payload unmarshal error: %w", err))
+		return
+	}
 
 	req := models.AISRequest{
 		ID:     record.GetString("ais_id"),
@@ -176,19 +184,23 @@ func (s *Service) processRecord(ctx context.Context, workerID int, record *core.
 
 	log.Info().Int("worker", workerID).Str("method", req.Method).Str("sale_id", req.Data.SaleId).Msg("Processing")
 
-	err := s.sendToOneC(ctx, req)
+	err = s.sendToOneC(ctx, req)
 
 	if err != nil {
 		log.Error().Err(err).Str("sale_id", req.Data.SaleId).Msg("Worker failed sync")
-		record.Set("status", "error")
-		record.Set("error_log", err.Error())
-		s.app.Save(record)
+		s.markError(record, err)
 		metrics.ProcessedTotal.WithLabelValues("error", req.Method).Inc()
 	} else {
 		log.Info().Str("sale_id", req.Data.SaleId).Msg("Worker synced success. Deleting.")
 		s.app.Delete(record)
 		metrics.ProcessedTotal.WithLabelValues("success", req.Method).Inc()
 	}
+}
+
+func (s *Service) markError(record *core.Record, err error) {
+	record.Set("status", "error")
+	record.Set("error_log", err.Error())
+	s.app.Save(record)
 }
 
 func (s *Service) sendToOneC(ctx context.Context, req models.AISRequest) error {

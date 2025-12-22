@@ -1,17 +1,8 @@
 {
     "swagger": "2.0",
     "info": {
-        "description": "Сервис интеграции AIS и 1С. Гарантированная доставка сообщений через очередь.",
-        "title": "AIS-1C Proxy API",
-        "termsOfService": "http://swagger.io/terms/",
-        "contact": {
-            "name": "API Support",
-            "email": "support@example.com"
-        },
-        "version": "1.0"
+        "contact": {}
     },
-    "host": "localhost:8081",
-    "basePath": "/api/v1",
     "paths": {
         "/data": {
             "put": {
@@ -198,6 +189,7 @@
                     "type": "string"
                 },
                 "ClientClientTypeId": {
+                    "description": "Enum: 1=Legal, 2=Resident, 3=NonResident",
                     "type": "string"
                 },
                 "ClientContractorTypeId": {
@@ -213,7 +205,7 @@
                     "type": "string"
                 },
                 "ClientId": {
-                    "description": "--- Client Fields ---",
+                    "description": "--- Client Fields ---\nRequired: Id, Type, Voen, Name. Others are optional.",
                     "type": "string"
                 },
                 "ClientIndex": {
@@ -238,10 +230,11 @@
                     "type": "string"
                 },
                 "ContractEndDate": {
+                    "description": "Optional",
                     "type": "string"
                 },
                 "ContractId": {
-                    "description": "--- Contract Fields ---",
+                    "description": "--- Contract Fields ---\nAll required except EndDate",
                     "type": "string"
                 },
                 "ContractIsTransfer": {
@@ -285,9 +278,11 @@
                     "type": "string"
                 },
                 "SaleComment": {
+                    "description": "Required for Cancellation (DELETE)",
                     "type": "string"
                 },
                 "SaleDate": {
+                    "description": "Format: ISO8601 or YYYY-MM-DD HH:mm:ss",
                     "type": "string"
                 },
                 "SaleDeclarationNo": {
@@ -317,12 +312,14 @@
                     "type": "string"
                 },
                 "SalePayStatusId": {
+                    "description": "Enum: 1=NotPaid, 2=Paid, 3=Partial, 4=Cancelled, 5=Pending, 6=Return, etc.",
                     "type": "string"
                 },
                 "SalePayType": {
                     "type": "string"
                 },
                 "SalePaymentType": {
+                    "description": "Enum: 0=None, 1=Avans, 3=Hop, 4=Vais, 5=Contract, 6=Manual, 7=Emanat, 8=Kocurme",
                     "type": "string"
                 },
                 "SalePrecinctId": {
@@ -330,25 +327,6 @@
                 },
                 "SaleVatAmount": {
                     "type": "number"
-                },
-                "TransactionAmount": {
-                    "type": "number"
-                },
-                "TransactionBalanceBeforeSale": {
-                    "type": "number"
-                },
-                "TransactionComment": {
-                    "type": "string"
-                },
-                "TransactionDate": {
-                    "type": "string"
-                },
-                "TransactionId": {
-                    "description": "--- Transaction Fields ---",
-                    "type": "string"
-                },
-                "TransactionIsSale": {
-                    "type": "boolean"
                 },
                 "UserActive": {
                     "type": "boolean"
@@ -360,7 +338,7 @@
                     "type": "string"
                 },
                 "UserId": {
-                    "description": "--- User Fields ---",
+                    "description": "--- User Fields ---\nRequired for Cancellation: UserId",
                     "type": "string"
                 },
                 "UserLastName": {
@@ -379,6 +357,7 @@
                     "type": "string"
                 },
                 "UserStatusId": {
+                    "description": "Enum: 1=SuperAdmin, 2=Accountant, 3=Inspector, ...",
                     "type": "string"
                 }
             }
@@ -387,12 +366,7 @@
             "type": "object",
             "properties": {
                 "data": {
-                    "description": "Основные данные документа",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/models.AISDocument"
-                        }
-                    ]
+                    "$ref": "#/definitions/models.AISDocument"
                 },
                 "id": {
                     "type": "string"
@@ -401,7 +375,6 @@
                     "type": "integer"
                 },
                 "type": {
-                    "description": "Тип документа: \"sale\", \"return\" и т.д.",
                     "type": "string"
                 }
             }
@@ -454,20 +427,12 @@
                     "type": "string"
                 },
                 "ServiceName": {
-                    "description": "Дополнительные поля по услуге",
                     "type": "string"
                 },
                 "ServiceUnit": {
                     "type": "string"
                 }
             }
-        }
-    },
-    "securityDefinitions": {
-        "ApiKeyAuth": {
-            "type": "apiKey",
-            "name": "X-API-Key",
-            "in": "header"
         }
     }
 }

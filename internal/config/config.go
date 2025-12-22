@@ -2,6 +2,7 @@
 
 import (
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -15,6 +16,8 @@ type Config struct {
 	OneCUser      string // Логин 1С
 	OneCPassword  string // Пароль 1С
 	OneCTimeout   time.Duration
+	WorkerCount   int
+	BatchSize     int
 }
 
 func Load() *Config {
@@ -29,11 +32,21 @@ func Load() *Config {
 		OneCUser:      getEnv("ONEC_USER", ""),
 		OneCPassword:  getEnv("ONEC_PASSWORD", ""),
 		OneCTimeout:   15 * time.Second,
+		WorkerCount:   getEnvAsInt("WORKER_COUNT", 5),
+		BatchSize:     getEnvAsInt("BATCH_SIZE", 50),
 	}
 }
 
 func getEnv(key, defaultVal string) string {
 	if value, exists := os.LookupEnv(key); exists {
+		return value
+	}
+	return defaultVal
+}
+
+func getEnvAsInt(key string, defaultVal int) int {
+	valueStr := getEnv(key, "")
+	if value, err := strconv.Atoi(valueStr); err == nil {
 		return value
 	}
 	return defaultVal

@@ -55,6 +55,7 @@ func (h *Handler) ReceiveData(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Валидация для UPDATE и DELETE
 	if (r.Method == http.MethodPut || r.Method == http.MethodDelete) && req.Data.SaleId == "" {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(models.APIResponse{
@@ -62,6 +63,34 @@ func (h *Handler) ReceiveData(w http.ResponseWriter, r *http.Request) {
 			Error:   "Missing 'data.SaleId' for " + r.Method + " operation",
 		})
 		return
+	}
+
+	// Специфичная валидация для ОТМЕНЫ (DELETE)
+	if r.Method == http.MethodDelete {
+		if req.Data.SaleDate == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(models.APIResponse{
+				Success: false,
+				Error:   "Cancellation requires 'data.SaleDate'",
+			})
+			return
+		}
+		if req.Data.UserId == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(models.APIResponse{
+				Success: false,
+				Error:   "Cancellation requires 'data.UserId' (who cancelled)",
+			})
+			return
+		}
+		if req.Data.SaleComment == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(models.APIResponse{
+				Success: false,
+				Error:   "Cancellation requires 'data.SaleComment' (reason)",
+			})
+			return
+		}
 	}
 
 	req.Method = r.Method

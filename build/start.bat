@@ -1,57 +1,54 @@
 ﻿@echo off
 setlocal
-title AIS-1C Integration Service [Supervisor]
+title AIS-1C Integration Service
 cd /d "%~dp0"
 
-:check_env
-if not exist "..\monitoring\prometheus.exe" (
-    color 6F
-    echo [WARN] Prometheus not found!
-    echo Please run 'setup.bat' first to install monitoring tools.
+:: 1. Проверка .env
+if not exist ".env" (
+    echo [ERROR] .env file not found! 
+    echo Creating template...
+    echo SERVER_PORT=:8081 > .env
+    echo AIS_TOKEN=secret-123 >> .env
     pause
     exit /b
 )
 
-:build
-echo [INFO] Checking integrity and building...
-cd ..
-go build -o build/server.exe ./cmd/api
-cd build
-if %ERRORLEVEL% NEQ 0 (
-    color 4F
-    echo [ERROR] Build failed! Fix code errors.
-    echo Waiting 10 seconds to retry...
-    timeout /t 10
-    goto build
+:: 2. Запуск мониторинга (если установлен)
+echo [INFO] Starting Infrastructure...
+
+:: Prometheus
+if exist "monitoring\prometheus.exe" (
+    start "Prometheus" /min monitoring\prometheus.exe --config.file=monitoring\prometheus.yml
 )
 
-:run_monitor
-echo [INFO] Starting Prometheus...
-start "Prometheus Metrics" /min ..\monitoring\prometheus.exe --config.file=..\monitoring\prometheus.yml
+:: Grafana
+if exist "monitoring\grafana\bin\grafana-server.exe" (
+    set GF_PATHS_PROVISIONING=..\..\grafana_provisioning
+    pushd monitoring\grafana\bin
+    start "Grafana" /min grafana-server.exe
+    popd
+)
 
-:run_server
-color 0A
+:run
 cls
 echo =====================================================
-echo   AIS-1C Integration Service (PocketBase + 1C)
+echo   🚀 AIS-1C INTEGRATION SERVICE IS RUNNING
 echo =====================================================
-echo   [API]      http://localhost:8081/api/v1/data
-echo   [UI]       http://localhost:8081/_/
-echo   [DOCS]     http://localhost:8081/swagger/index.html
-echo   [METRICS]  http://localhost:8081/metrics
-echo   [PROMETHEUS] http://localhost:9090
+echo   ➜ API:      http://127.0.0.1:8081/api/v1/data
+echo   ➜ Admin UI: http://127.0.0.1:8081/_/
+echo   ➜ Swagger:  http://127.0.0.1:8081/swagger/index.html
 echo.
-echo   [LOGS]     See app.log for details
+if exist "monitoring\grafana" (
+    echo   📊 MONITORING:
+    echo   ➜ Grafana:    http://localhost:3000 (admin/admin)
+)
 echo =====================================================
 echo.
 
-:: Run Server
 server.exe serve --http="0.0.0.0:8081"
 
-:: Crash Handler
 color 6F
 echo.
-echo [WARN] Server process terminated.
-echo [WARN] Restarting in 5 seconds...
+echo [WARN] Server process terminated. Restarting in 5s...
 timeout /t 5
-goto run_server
+goto run

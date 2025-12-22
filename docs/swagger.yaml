@@ -1,4 +1,3 @@
-basePath: /api/v1
 definitions:
   models.AISDocument:
     properties:
@@ -7,6 +6,7 @@ definitions:
       ClientCity:
         type: string
       ClientClientTypeId:
+        description: 'Enum: 1=Legal, 2=Resident, 3=NonResident'
         type: string
       ClientContractorTypeId:
         type: string
@@ -17,7 +17,9 @@ definitions:
       ClientFullName:
         type: string
       ClientId:
-        description: '--- Client Fields ---'
+        description: |-
+          --- Client Fields ---
+          Required: Id, Type, Voen, Name. Others are optional.
         type: string
       ClientIndex:
         type: string
@@ -34,9 +36,12 @@ definitions:
       ClientWebsite:
         type: string
       ContractEndDate:
+        description: Optional
         type: string
       ContractId:
-        description: '--- Contract Fields ---'
+        description: |-
+          --- Contract Fields ---
+          All required except EndDate
         type: string
       ContractIsTransfer:
         type: boolean
@@ -66,8 +71,10 @@ definitions:
       SaleClientId:
         type: string
       SaleComment:
+        description: Required for Cancellation (DELETE)
         type: string
       SaleDate:
+        description: 'Format: ISO8601 or YYYY-MM-DD HH:mm:ss'
         type: string
       SaleDeclarationNo:
         type: string
@@ -88,28 +95,19 @@ definitions:
       SalePayDate:
         type: string
       SalePayStatusId:
+        description: 'Enum: 1=NotPaid, 2=Paid, 3=Partial, 4=Cancelled, 5=Pending,
+          6=Return, etc.'
         type: string
       SalePayType:
         type: string
       SalePaymentType:
+        description: 'Enum: 0=None, 1=Avans, 3=Hop, 4=Vais, 5=Contract, 6=Manual,
+          7=Emanat, 8=Kocurme'
         type: string
       SalePrecinctId:
         type: string
       SaleVatAmount:
         type: number
-      TransactionAmount:
-        type: number
-      TransactionBalanceBeforeSale:
-        type: number
-      TransactionComment:
-        type: string
-      TransactionDate:
-        type: string
-      TransactionId:
-        description: '--- Transaction Fields ---'
-        type: string
-      TransactionIsSale:
-        type: boolean
       UserActive:
         type: boolean
       UserEmail:
@@ -117,7 +115,9 @@ definitions:
       UserFirstName:
         type: string
       UserId:
-        description: '--- User Fields ---'
+        description: |-
+          --- User Fields ---
+          Required for Cancellation: UserId
         type: string
       UserLastName:
         type: string
@@ -130,20 +130,18 @@ definitions:
       UserRegistrationDate:
         type: string
       UserStatusId:
+        description: 'Enum: 1=SuperAdmin, 2=Accountant, 3=Inspector, ...'
         type: string
     type: object
   models.AISRequest:
     properties:
       data:
-        allOf:
-        - $ref: '#/definitions/models.AISDocument'
-        description: Основные данные документа
+        $ref: '#/definitions/models.AISDocument'
       id:
         type: string
       timestamp:
         type: integer
       type:
-        description: 'Тип документа: "sale", "return" и т.д.'
         type: string
     type: object
   models.APIResponse:
@@ -178,21 +176,12 @@ definitions:
       ServiceCode:
         type: string
       ServiceName:
-        description: Дополнительные поля по услуге
         type: string
       ServiceUnit:
         type: string
     type: object
-host: localhost:8081
 info:
-  contact:
-    email: support@example.com
-    name: API Support
-  description: Сервис интеграции AIS и 1С. Гарантированная доставка сообщений через
-    очередь.
-  termsOfService: http://swagger.io/terms/
-  title: AIS-1C Proxy API
-  version: "1.0"
+  contact: {}
 paths:
   /data:
     delete:
@@ -309,9 +298,4 @@ paths:
       summary: Прием данных (Sale/Update/Delete)
       tags:
       - Integration
-securityDefinitions:
-  ApiKeyAuth:
-    in: header
-    name: X-API-Key
-    type: apiKey
 swagger: "2.0"

@@ -9,11 +9,7 @@ const docTemplate = `{
     "info": {
         "description": "{{escape .Description}}",
         "title": "{{.Title}}",
-        "termsOfService": "http://swagger.io/terms/",
-        "contact": {
-            "name": "API Support",
-            "email": "support@example.com"
-        },
+        "contact": {},
         "version": "{{.Version}}"
     },
     "host": "{{.Host}}",
@@ -204,6 +200,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "ClientClientTypeId": {
+                    "description": "Enum: 1=Legal, 2=Resident, 3=NonResident",
                     "type": "string"
                 },
                 "ClientContractorTypeId": {
@@ -219,7 +216,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "ClientId": {
-                    "description": "--- Client Fields ---",
+                    "description": "--- Client Fields ---\nRequired: Id, Type, Voen, Name. Others are optional.",
                     "type": "string"
                 },
                 "ClientIndex": {
@@ -244,10 +241,11 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "ContractEndDate": {
+                    "description": "Optional",
                     "type": "string"
                 },
                 "ContractId": {
-                    "description": "--- Contract Fields ---",
+                    "description": "--- Contract Fields ---\nAll required except EndDate",
                     "type": "string"
                 },
                 "ContractIsTransfer": {
@@ -291,9 +289,11 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "SaleComment": {
+                    "description": "Required for Cancellation (DELETE)",
                     "type": "string"
                 },
                 "SaleDate": {
+                    "description": "Format: ISO8601 or YYYY-MM-DD HH:mm:ss",
                     "type": "string"
                 },
                 "SaleDeclarationNo": {
@@ -323,12 +323,14 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "SalePayStatusId": {
+                    "description": "Enum: 1=NotPaid, 2=Paid, 3=Partial, 4=Cancelled, 5=Pending, 6=Return, etc.",
                     "type": "string"
                 },
                 "SalePayType": {
                     "type": "string"
                 },
                 "SalePaymentType": {
+                    "description": "Enum: 0=None, 1=Avans, 3=Hop, 4=Vais, 5=Contract, 6=Manual, 7=Emanat, 8=Kocurme",
                     "type": "string"
                 },
                 "SalePrecinctId": {
@@ -336,25 +338,6 @@ const docTemplate = `{
                 },
                 "SaleVatAmount": {
                     "type": "number"
-                },
-                "TransactionAmount": {
-                    "type": "number"
-                },
-                "TransactionBalanceBeforeSale": {
-                    "type": "number"
-                },
-                "TransactionComment": {
-                    "type": "string"
-                },
-                "TransactionDate": {
-                    "type": "string"
-                },
-                "TransactionId": {
-                    "description": "--- Transaction Fields ---",
-                    "type": "string"
-                },
-                "TransactionIsSale": {
-                    "type": "boolean"
                 },
                 "UserActive": {
                     "type": "boolean"
@@ -366,7 +349,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "UserId": {
-                    "description": "--- User Fields ---",
+                    "description": "--- User Fields ---\nRequired for Cancellation: UserId",
                     "type": "string"
                 },
                 "UserLastName": {
@@ -385,6 +368,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "UserStatusId": {
+                    "description": "Enum: 1=SuperAdmin, 2=Accountant, 3=Inspector, ...",
                     "type": "string"
                 }
             }
@@ -393,12 +377,7 @@ const docTemplate = `{
             "type": "object",
             "properties": {
                 "data": {
-                    "description": "Основные данные документа",
-                    "allOf": [
-                        {
-                            "$ref": "#/definitions/models.AISDocument"
-                        }
-                    ]
+                    "$ref": "#/definitions/models.AISDocument"
                 },
                 "id": {
                     "type": "string"
@@ -407,7 +386,6 @@ const docTemplate = `{
                     "type": "integer"
                 },
                 "type": {
-                    "description": "Тип документа: \"sale\", \"return\" и т.д.",
                     "type": "string"
                 }
             }
@@ -460,7 +438,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "ServiceName": {
-                    "description": "Дополнительные поля по услуге",
                     "type": "string"
                 },
                 "ServiceUnit": {
@@ -468,24 +445,17 @@ const docTemplate = `{
                 }
             }
         }
-    },
-    "securityDefinitions": {
-        "ApiKeyAuth": {
-            "type": "apiKey",
-            "name": "X-API-Key",
-            "in": "header"
-        }
     }
 }`
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "1.0",
-	Host:             "localhost:8081",
-	BasePath:         "/api/v1",
+	Version:          "",
+	Host:             "",
+	BasePath:         "",
 	Schemes:          []string{},
-	Title:            "AIS-1C Proxy API",
-	Description:      "Сервис интеграции AIS и 1С. Гарантированная доставка сообщений через очередь.",
+	Title:            "",
+	Description:      "",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

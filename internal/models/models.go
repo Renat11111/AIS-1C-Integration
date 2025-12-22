@@ -3,15 +3,15 @@
 // AISRequest - обертка запроса (конверт).
 type AISRequest struct {
 	ID        string      `json:"id"`
-	Type      string      `json:"type"`      // Тип документа: "sale", "return" и т.д.
+	Type      string      `json:"type"`
 	Timestamp int64       `json:"timestamp"`
-	Data      AISDocument `json:"data"`      // Основные данные документа
+	Data      AISDocument `json:"data"`
 	
-	// Internal field to pass HTTP method to worker (POST/PUT/DELETE)
+	// Internal field
 	Method    string      `json:"-"` 
 }
 
-// SaleDetail - Детали продажи (Номенклатура), приходят в виде массива.
+// SaleDetail - Детали продажи.
 type SaleDetail struct {
 	SaleDetailId          string  `json:"SaleDetailId"`
 	SaleDetailSaleId      string  `json:"SaleDetailSaleId"`
@@ -23,26 +23,31 @@ type SaleDetail struct {
 	SaleDetailVATAmount   float64 `json:"SaleDetailVATAmount"`
 	SaleDetailTotalAmount float64 `json:"SaleDetailTotalAmount"`
 	
-	// Дополнительные поля по услуге
 	ServiceName           string  `json:"ServiceName,omitempty"`
 	ServiceCode           string  `json:"ServiceCode,omitempty"`
 	ServiceUnit           string  `json:"ServiceUnit,omitempty"`
 }
 
-// AISDocument - Полная структура данных.
+// AISDocument - Основная структура.
 type AISDocument struct {
 	// --- Sale Fields ---
 	SaleId            string  `json:"SaleId"`
 	SaleClientId      string  `json:"SaleClientId"`
 	SalePrecinctId    string  `json:"SalePrecinctId"`
 	SaleInspectorId   string  `json:"SaleInspectorId"`
-	SalePayStatusId   string  `json:"SalePayStatusId"`
-	SaleDate          string  `json:"SaleDate"`
+	
+	// Enum: 1=NotPaid, 2=Paid, 3=Partial, 4=Cancelled, 5=Pending, 6=Return, etc.
+	SalePayStatusId   string  `json:"SalePayStatusId"` 
+	
+	SaleDate          string  `json:"SaleDate"` // Format: ISO8601 or YYYY-MM-DD HH:mm:ss
 	SaleDeclarationNo string  `json:"SaleDeclarationNo"`
-	SaleComment       string  `json:"SaleComment"`
+	SaleComment       string  `json:"SaleComment"` // Required for Cancellation (DELETE)
 	SaleIsDiplomatic  bool    `json:"SaleIsDiplomatic"`
 	SaleCarNumber     string  `json:"SaleCarNumber"`
+	
+	// Enum: 0=None, 1=Avans, 3=Hop, 4=Vais, 5=Contract, 6=Manual, 7=Emanat, 8=Kocurme
 	SalePaymentType   string  `json:"SalePaymentType"`
+	
 	SalePayDate       string  `json:"SalePayDate"`
 	SalePayType       string  `json:"SalePayType"`
 	SaleMainAmount    float64 `json:"SaleMainAmount"`
@@ -53,26 +58,35 @@ type AISDocument struct {
 	Details []SaleDetail `json:"SaleDetails"`
 
 	// --- Client Fields ---
+	// Required: Id, Type, Voen, Name. Others are optional.
 	ClientId               string `json:"ClientId"`
+	
+	// Enum: 1=Legal, 2=Resident, 3=NonResident
 	ClientClientTypeId     string `json:"ClientClientTypeId"`
+	
 	ClientVOENOrPassportNo string `json:"ClientVOENOrPassportNo"`
 	ClientFullName         string `json:"ClientFullName"`
-	ClientEmail            string `json:"ClientEmail"`
-	ClientPhone            string `json:"ClientPhone"`
-	ClientFieldOfActivity  string `json:"ClientFieldOfActivity"`
-	ClientCity             string `json:"ClientCity"`
-	ClientLegalAddress     string `json:"ClientLegalAddress"`
-	ClientActualAddress    string `json:"ClientActualAddress"`
-	ClientIndex            string `json:"ClientIndex"`
-	ClientWebsite          string `json:"ClientWebsite"`
-	ClientLeaderFullName   string `json:"ClientLeaderFullName"`
-	ClientLeaderDuty       string `json:"ClientLeaderDuty"`
-	ClientContractorTypeId string `json:"ClientContractorTypeId"`
+	
+	ClientEmail            string `json:"ClientEmail,omitempty"`
+	ClientPhone            string `json:"ClientPhone,omitempty"`
+	ClientFieldOfActivity  string `json:"ClientFieldOfActivity,omitempty"`
+	ClientCity             string `json:"ClientCity,omitempty"`
+	ClientLegalAddress     string `json:"ClientLegalAddress,omitempty"`
+	ClientActualAddress    string `json:"ClientActualAddress,omitempty"`
+	ClientIndex            string `json:"ClientIndex,omitempty"`
+	ClientWebsite          string `json:"ClientWebsite,omitempty"`
+	ClientLeaderFullName   string `json:"ClientLeaderFullName,omitempty"`
+	ClientLeaderDuty       string `json:"ClientLeaderDuty,omitempty"`
+	ClientContractorTypeId string `json:"ClientContractorTypeId,omitempty"`
 
 	// --- User Fields ---
+	// Required for Cancellation: UserId
 	UserId               string `json:"UserId"`
 	UserPrecinctId       string `json:"UserPrecinctId"`
+	
+	// Enum: 1=SuperAdmin, 2=Accountant, 3=Inspector, ...
 	UserStatusId         string `json:"UserStatusId"`
+	
 	UserRegistrationDate string `json:"UserRegistrationDate"`
 	UserName             string `json:"UserName"`
 	UserFirstName        string `json:"UserFirstName"`
@@ -82,23 +96,16 @@ type AISDocument struct {
 	UserActive           bool   `json:"UserActive"`
 
 	// --- Contract Fields ---
-	ContractId         string `json:"ContractId,omitempty"`
-	ContractNo         string `json:"ContractNo,omitempty"`
-	ContractSignedDate string `json:"ContractSignedDate,omitempty"`
-	ContractStartDate  string `json:"ContractStartDate,omitempty"`
-	ContractEndDate    string `json:"ContractEndDate,omitempty"`
-	ContractType       string `json:"ContractType,omitempty"`
-	ContractStatus     string `json:"ContractStatus,omitempty"`
-	ContractIsTransfer bool   `json:"ContractIsTransfer,omitempty"`
-	ContractPayTime    string `json:"ContractPayTime,omitempty"`
-
-	// --- Transaction Fields ---
-	TransactionId                string  `json:"TransactionId,omitempty"`
-	TransactionAmount            float64 `json:"TransactionAmount,omitempty"`
-	TransactionComment           string  `json:"TransactionComment,omitempty"`
-	TransactionDate              string  `json:"TransactionDate,omitempty"`
-	TransactionBalanceBeforeSale float64 `json:"TransactionBalanceBeforeSale,omitempty"`
-	TransactionIsSale            bool    `json:"TransactionIsSale,omitempty"`
+	// All required except EndDate
+	ContractId         string `json:"ContractId"`
+	ContractNo         string `json:"ContractNo"`
+	ContractSignedDate string `json:"ContractSignedDate"`
+	ContractStartDate  string `json:"ContractStartDate"`
+	ContractEndDate    string `json:"ContractEndDate,omitempty"` // Optional
+	ContractType       string `json:"ContractType"`
+	ContractStatus     string `json:"ContractStatus"`
+	ContractIsTransfer bool   `json:"ContractIsTransfer"`
+	ContractPayTime    string `json:"ContractPayTime"`
 
 	// --- Reference Fields ---
 	PrecinctName   string `json:"PrecinctName,omitempty"`
@@ -106,7 +113,7 @@ type AISDocument struct {
 	PayStatusName  string `json:"PayStatusName,omitempty"`
 }
 
-// APIResponse is the standard response structure.
+// APIResponse structure.
 type APIResponse struct {
 	Success bool   `json:"success"`
 	Message string `json:"message,omitempty"`

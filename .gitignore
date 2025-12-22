@@ -8,10 +8,9 @@ pb_data/
 build/server.exe
 build/*.exe
 
-# Monitoring binaries
-monitoring/prometheus.exe
-monitoring/prometheus.zip
-monitoring/temp/
+# Monitoring (All binaries and data)
+build/monitoring/
+monitoring/
 
 # Logs
 *.log
@@ -20,3 +19,5 @@ app.log
 # IDE
 .vscode/
 .idea/
+
+.genkit/
