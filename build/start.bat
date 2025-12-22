@@ -1,4 +1,4 @@
-﻿@echo off
+@echo off
 setlocal
 title AIS-1C Integration Service
 cd /d "%~dp0"
@@ -6,9 +6,7 @@ cd /d "%~dp0"
 :: 1. Проверка .env
 if not exist ".env" (
     echo [ERROR] .env file not found! 
-    echo Creating template...
-    echo SERVER_PORT=:8081 > .env
-    echo AIS_TOKEN=secret-123 >> .env
+    echo Please configure .env based on .env.example
     pause
     exit /b
 )
@@ -23,7 +21,6 @@ if exist "monitoring\prometheus.exe" (
 
 :: Grafana
 if exist "monitoring\grafana\bin\grafana-server.exe" (
-    set GF_PATHS_PROVISIONING=..\..\grafana_provisioning
     pushd monitoring\grafana\bin
     start "Grafana" /min grafana-server.exe
     popd
@@ -45,10 +42,18 @@ if exist "monitoring\grafana" (
 echo =====================================================
 echo.
 
-server.exe serve --http="0.0.0.0:8081"
+if exist "server.exe" (
+    server.exe serve --http="0.0.0.0:8081"
+) else (
+    echo [ERROR] server.exe not found! Please build the project.
+    echo Use: go build -o build/server.exe ./cmd/api/main.go
+    pause
+    exit /b
+)
 
-color 6F
+color 4F
 echo.
 echo [WARN] Server process terminated. Restarting in 5s...
 timeout /t 5
+color 07
 goto run
