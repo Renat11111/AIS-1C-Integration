@@ -50,7 +50,20 @@ func main() {
 			return err
 		}
 
-		go onecService.StartBackgroundWorker(context.Background())
+		// Создаем контекст для управления воркерами
+		workerCtx, workerCancel := context.WithCancel(context.Background())
+
+		// Запускаем воркеры с этим контекстом
+		go onecService.StartBackgroundWorker(workerCtx)
+
+		// Регистрируем хук для Graceful Shutdown
+		app.OnTerminate().BindFunc(func(te *core.TerminateEvent) error {
+			log.Info().Msg("🛑 Shutdown signal received. Stopping workers...")
+			workerCancel()      // Сигнализируем воркерам остановиться
+			onecService.Wait()  // Ждем их завершения
+			log.Info().Msg("✅ All workers stopped. Exiting.")
+			return te.Next()
+		})
 
 		restHandler := rest.NewHandler(onecService)
 		legacyAuthMw := middleware.AuthMiddleware(cfg)

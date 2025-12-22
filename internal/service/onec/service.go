@@ -34,6 +34,7 @@ type Service struct {
 	client  *http.Client
 	bufPool sync.Pool
 	jobs    chan *core.Record
+	wg      sync.WaitGroup
 }
 
 func NewService(app *pocketbase.PocketBase, cfg *config.Config) *Service {
@@ -91,13 +92,23 @@ func (s *Service) Push(req models.AISRequest) error {
 
 func (s *Service) StartBackgroundWorker(ctx context.Context) {
 	for i := 0; i < s.cfg.WorkerCount; i++ {
+		s.wg.Add(1)
 		go s.worker(ctx, i)
 	}
 	log.Info().Int("count", s.cfg.WorkerCount).Msg("Started 1C integration workers")
+	
+	s.wg.Add(1)
 	go s.dispatcher(ctx)
 }
 
+// Wait blocks until all background workers are stopped
+func (s *Service) Wait() {
+	s.wg.Wait()
+	log.Info().Msg("All workers stopped gracefully")
+}
+
 func (s *Service) dispatcher(ctx context.Context) {
+	defer s.wg.Done()
 	log.Info().Msg("Started DB Dispatcher")
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
@@ -105,6 +116,7 @@ func (s *Service) dispatcher(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
+			log.Info().Msg("Dispatcher stopping...")
 			return
 		case <-ticker.C:
 			s.fetchAndDispatch()
@@ -148,9 +160,11 @@ func (s *Service) fetchAndDispatch() {
 }
 
 func (s *Service) worker(ctx context.Context, id int) {
+	defer s.wg.Done()
 	for {
 		select {
 		case <-ctx.Done():
+			log.Debug().Int("worker_id", id).Msg("Worker stopping...")
 			return
 		case record := <-s.jobs:
 			s.processRecord(ctx, id, record)
