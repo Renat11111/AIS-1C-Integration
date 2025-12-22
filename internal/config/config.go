@@ -10,6 +10,13 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// Global Build Info
+var (
+	Version   = "dev"
+	CommitSHA = "none"
+	BuildTime = "unknown"
+)
+
 type Config struct {
 	ServerPort    string
 	AISToken      string

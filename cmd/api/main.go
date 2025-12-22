@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"os"
 
 	"ais-1c-proxy/internal/config"
 	"ais-1c-proxy/internal/middleware"
@@ -110,7 +109,8 @@ func main() {
 
 		// ВЫВОД КРАСИВОГО БАННЕРА
 		fmt.Println("\n\033[1;32m=====================================================")
-		fmt.Println("  🚀 AIS-1C INTEGRATION SERVICE IS RUNNING")
+		fmt.Printf("  🚀 AIS-1C INTEGRATION SERVICE IS RUNNING\n")
+		fmt.Printf("  📦 Version: %s (Commit: %s)\n", config.Version, config.CommitSHA)
 		fmt.Println("=====================================================\033[0m")
 		fmt.Printf("  \033[1;34m➜ API:\033[0m      http://127.0.0.1:8081/api/v1/data\n")
 		fmt.Printf("  \033[1;34m➜ Health:\033[0m   http://127.0.0.1:8081/api/health\n")

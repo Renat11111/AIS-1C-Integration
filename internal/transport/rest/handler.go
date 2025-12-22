@@ -1,6 +1,7 @@
 ﻿package rest
 
 import (
+	"ais-1c-proxy/internal/config"
 	"ais-1c-proxy/internal/models"
 	"ais-1c-proxy/internal/service/onec"
 	"encoding/json"
@@ -86,8 +87,11 @@ func (h *Handler) ReceiveData(w http.ResponseWriter, r *http.Request) {
 // @Router       /health [get]
 func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(models.APIResponse{
-		Success: true,
-		Message: "OK",
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":    true,
+		"message":    "OK",
+		"version":    config.Version,
+		"commit_sha": config.CommitSHA,
+		"build_time": config.BuildTime,
 	})
 }
