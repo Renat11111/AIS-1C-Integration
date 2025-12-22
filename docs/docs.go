@@ -9,13 +9,35 @@ const docTemplate = `{
     "info": {
         "description": "{{escape .Description}}",
         "title": "{{.Title}}",
-        "contact": {},
+        "contact": {
+            "name": "Renat"
+        },
         "version": "{{.Version}}"
     },
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/data": {
+        "/health": {
+            "get": {
+                "description": "Проверяет доступность сервиса",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "System"
+                ],
+                "summary": "Health Check",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/data": {
             "put": {
                 "description": "Принимает JSON пакет от AIS, ставит в очередь на отправку в 1С.",
                 "consumes": [
@@ -382,11 +404,12 @@ const docTemplate = `{
                 "id": {
                     "type": "string"
                 },
+                "method": {
+                    "description": "sale, sale_update, sale_cancellation, etc.",
+                    "type": "string"
+                },
                 "timestamp": {
                     "type": "integer"
-                },
-                "type": {
-                    "type": "string"
                 }
             }
         },
@@ -450,12 +473,12 @@ const docTemplate = `{
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "",
-	Host:             "",
-	BasePath:         "",
+	Version:          "1.0",
+	Host:             "localhost:8081",
+	BasePath:         "/api",
 	Schemes:          []string{},
-	Title:            "",
-	Description:      "",
+	Title:            "AIS-1C Integration Proxy API",
+	Description:      "Сервис-шлюз для гарантированной доставки данных из AIS в 1С через персистентную очередь.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

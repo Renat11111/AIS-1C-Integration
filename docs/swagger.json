@@ -1,10 +1,37 @@
 {
     "swagger": "2.0",
     "info": {
-        "contact": {}
+        "description": "Сервис-шлюз для гарантированной доставки данных из AIS в 1С через персистентную очередь.",
+        "title": "AIS-1C Integration Proxy API",
+        "contact": {
+            "name": "Renat"
+        },
+        "version": "1.0"
     },
+    "host": "localhost:8081",
+    "basePath": "/api",
     "paths": {
-        "/data": {
+        "/health": {
+            "get": {
+                "description": "Проверяет доступность сервиса",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "System"
+                ],
+                "summary": "Health Check",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/v1/data": {
             "put": {
                 "description": "Принимает JSON пакет от AIS, ставит в очередь на отправку в 1С.",
                 "consumes": [
@@ -371,11 +398,12 @@
                 "id": {
                     "type": "string"
                 },
+                "method": {
+                    "description": "sale, sale_update, sale_cancellation, etc.",
+                    "type": "string"
+                },
                 "timestamp": {
                     "type": "integer"
-                },
-                "type": {
-                    "type": "string"
                 }
             }
         },

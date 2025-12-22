@@ -19,7 +19,19 @@ func NewHandler(service *onec.Service) *Handler {
 
 // ReceiveData принимает данные от AIS
 // @Summary      Прием данных (Sale/Update/Delete)
-// ...
+// @Description  Принимает JSON пакет от AIS, ставит в очередь на отправку в 1С.
+// @Tags         Integration
+// @Accept       json
+// @Produce      json
+// @Param        X-API-Key header string true "API Key"
+// @Param        body body models.AISRequest true "Пакет данных"
+// @Success      200  {object}  models.APIResponse
+// @Failure      400  {object}  models.APIResponse
+// @Failure      401  {object}  models.APIResponse
+// @Failure      500  {object}  models.APIResponse
+// @Router       /v1/data [post]
+// @Router       /v1/data [put]
+// @Router       /v1/data [delete]
 func (h *Handler) ReceiveData(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost && r.Method != http.MethodPut && r.Method != http.MethodDelete {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -46,8 +58,7 @@ func (h *Handler) ReceiveData(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Явно устанавливаем метод из HTTP (если клиент прислал не то) или доверяем клиенту?
-	// Лучше доверять HTTP методу как источнику истины для роутинга
+	// Явно устанавливаем метод из HTTP (источник истины)
 	req.Method = r.Method 
 
 	if err := h.service.Push(req); err != nil {

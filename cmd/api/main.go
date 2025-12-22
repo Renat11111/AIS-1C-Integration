@@ -11,6 +11,7 @@ import (
 	"ais-1c-proxy/internal/service/onec"
 	"ais-1c-proxy/internal/transport/rest"
 	
+	"github.com/natefinch/lumberjack"
 	_ "ais-1c-proxy/docs"
 
 	"github.com/mattn/go-colorable"
@@ -23,9 +24,22 @@ import (
 	httpSwagger "github.com/swaggo/http-swagger"
 )
 
+// @title           AIS-1C Integration Proxy API
+// @version         1.0
+// @description     Сервис-шлюз для гарантированной доставки данных из AIS в 1С через персистентную очередь.
+// @contact.name    Renat
+// @host            localhost:8081
+// @BasePath        /api
+
 func main() {
-	// 1. КРАСИВОЕ ЛОГИРОВАНИЕ
-	logFile, _ := os.OpenFile("app.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	// 1. КРАСИВОЕ ЛОГИРОВАНИЕ С РОТАЦИЕЙ
+	logRotation := &lumberjack.Logger{
+		Filename:   "app.log",
+		MaxSize:    10, // megabytes
+		MaxBackups: 3,
+		MaxAge:     28,   // days
+		Compress:   true, // disabled by default
+	}
 	
 	// В консоль - красиво и с цветами, в файл - JSON
 	consoleWriter := zerolog.ConsoleWriter{
@@ -33,7 +47,7 @@ func main() {
 		TimeFormat: "15:04:05",
 	}
 	
-	multi := zerolog.MultiLevelWriter(consoleWriter, logFile)
+	multi := zerolog.MultiLevelWriter(consoleWriter, logRotation)
 	log.Logger = zerolog.New(multi).With().Timestamp().Logger()
 
 	app := pocketbase.New()

@@ -1,3 +1,4 @@
+basePath: /api
 definitions:
   models.AISDocument:
     properties:
@@ -139,10 +140,11 @@ definitions:
         $ref: '#/definitions/models.AISDocument'
       id:
         type: string
+      method:
+        description: sale, sale_update, sale_cancellation, etc.
+        type: string
       timestamp:
         type: integer
-      type:
-        type: string
     type: object
   models.APIResponse:
     properties:
@@ -180,10 +182,29 @@ definitions:
       ServiceUnit:
         type: string
     type: object
+host: localhost:8081
 info:
-  contact: {}
+  contact:
+    name: Renat
+  description: Сервис-шлюз для гарантированной доставки данных из AIS в 1С через персистентную
+    очередь.
+  title: AIS-1C Integration Proxy API
+  version: "1.0"
 paths:
-  /data:
+  /health:
+    get:
+      description: Проверяет доступность сервиса
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      summary: Health Check
+      tags:
+      - System
+  /v1/data:
     delete:
       consumes:
       - application/json

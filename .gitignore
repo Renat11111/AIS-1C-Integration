@@ -3,6 +3,13 @@
 
 # Database
 pb_data/
+data/
+build/pb_data/
+build/data/
+build/storage/
+*.db
+*.db-shm
+*.db-wal
 
 # Build artifacts
 build/server.exe
