@@ -76,6 +76,10 @@ func main() {
 		e.Router.POST("/api/v1/data", apiHandler)
 		e.Router.PUT("/api/v1/data", apiHandler)
 		e.Router.DELETE("/api/v1/data", apiHandler)
+		e.Router.GET("/api/health", func(evt *core.RequestEvent) error {
+			restHandler.HealthCheck(evt.Response, evt.Request)
+			return nil
+		})
 
 		// Metrics & Swagger
 		e.Router.GET("/metrics", func(evt *core.RequestEvent) error {
@@ -95,6 +99,7 @@ func main() {
 		fmt.Println("  🚀 AIS-1C INTEGRATION SERVICE IS RUNNING")
 		fmt.Println("=====================================================\033[0m")
 		fmt.Printf("  \033[1;34m➜ API:\033[0m      http://127.0.0.1:8081/api/v1/data\n")
+		fmt.Printf("  \033[1;34m➜ Health:\033[0m   http://127.0.0.1:8081/api/health\n")
 		fmt.Printf("  \033[1;34m➜ Admin UI:\033[0m http://127.0.0.1:8081/_/\n")
 		fmt.Printf("  \033[1;34m➜ Swagger:\033[0m  http://127.0.0.1:8081/swagger/index.html\n")
 		fmt.Printf("  \033[1;34m➜ Metrics:\033[0m  http://127.0.0.1:8081/metrics\n")

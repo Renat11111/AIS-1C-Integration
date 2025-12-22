@@ -1,14 +1,44 @@
 ﻿package models
 
+import (
+	"errors"
+	"net/http"
+)
+
 // AISRequest - обертка запроса (конверт).
 type AISRequest struct {
 	ID        string      `json:"id"`
-	Type      string      `json:"type"`
+	Method    string      `json:"method"` // sale, sale_update, sale_cancellation, etc.
 	Timestamp int64       `json:"timestamp"`
 	Data      AISDocument `json:"data"`
-	
-	// Internal field
-	Method    string      `json:"-"` 
+}
+
+// Validate проверяет обязательные поля в зависимости от метода.
+// Если methodOverride не пуст, он используется вместо req.Method (полезно при переопределении из HTTP метода)
+func (r *AISRequest) Validate(httpMethod string) error {
+	if r.ID == "" {
+		return errors.New("missing 'id' field (envelope ID)")
+	}
+
+	// Для PUT (Update) и DELETE (Cancel) обязателен ID продажи
+	if (httpMethod == http.MethodPut || httpMethod == http.MethodDelete) && r.Data.SaleId == "" {
+		return errors.New("missing 'data.SaleId' for " + httpMethod + " operation")
+	}
+
+	// Специфичная валидация для ОТМЕНЫ (DELETE)
+	if httpMethod == http.MethodDelete {
+		if r.Data.SaleDate == "" {
+			return errors.New("cancellation requires 'data.SaleDate'")
+		}
+		if r.Data.UserId == "" {
+			return errors.New("cancellation requires 'data.UserId' (who cancelled)")
+		}
+		if r.Data.SaleComment == "" {
+			return errors.New("cancellation requires 'data.SaleComment' (reason)")
+		}
+	}
+
+	return nil
 }
 
 // SaleDetail - Детали продажи.
