@@ -1,0 +1,39 @@
+linters-settings:
+  errcheck:
+    check-type-assertions: true
+    check-blank: true
+  govet:
+    check-shadowing: true
+  revive:
+    min-confidence: 0.8
+  gocritic:
+    enabled-tags:
+      - diagnostic
+      - style
+      - performance
+  unused:
+    check-exported: false
+
+linters:
+  disable-all: true
+  enable:
+    - errcheck
+    - gosimple
+    - govet
+    - ineffassign
+    - staticcheck
+    - typecheck
+    - unused
+    - revive
+    - gocritic
+    - misspell
+    - bodyclose
+
+run:
+  timeout: 5m
+  tests: true
+
+issues:
+  exclude-use-default: false
+  max-issues-per-linter: 0
+  max-same-issues: 0
