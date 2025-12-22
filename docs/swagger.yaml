@@ -1,0 +1,317 @@
+basePath: /api/v1
+definitions:
+  models.AISDocument:
+    properties:
+      ClientActualAddress:
+        type: string
+      ClientCity:
+        type: string
+      ClientClientTypeId:
+        type: string
+      ClientContractorTypeId:
+        type: string
+      ClientEmail:
+        type: string
+      ClientFieldOfActivity:
+        type: string
+      ClientFullName:
+        type: string
+      ClientId:
+        description: '--- Client Fields ---'
+        type: string
+      ClientIndex:
+        type: string
+      ClientLeaderDuty:
+        type: string
+      ClientLeaderFullName:
+        type: string
+      ClientLegalAddress:
+        type: string
+      ClientPhone:
+        type: string
+      ClientVOENOrPassportNo:
+        type: string
+      ClientWebsite:
+        type: string
+      ContractEndDate:
+        type: string
+      ContractId:
+        description: '--- Contract Fields ---'
+        type: string
+      ContractIsTransfer:
+        type: boolean
+      ContractNo:
+        type: string
+      ContractPayTime:
+        type: string
+      ContractSignedDate:
+        type: string
+      ContractStartDate:
+        type: string
+      ContractStatus:
+        type: string
+      ContractType:
+        type: string
+      DepartmentName:
+        type: string
+      PayStatusName:
+        type: string
+      PrecinctName:
+        description: '--- Reference Fields ---'
+        type: string
+      Privilege:
+        type: string
+      SaleCarNumber:
+        type: string
+      SaleClientId:
+        type: string
+      SaleComment:
+        type: string
+      SaleDate:
+        type: string
+      SaleDeclarationNo:
+        type: string
+      SaleDetails:
+        description: '--- Array of Nomenclatures ---'
+        items:
+          $ref: '#/definitions/models.SaleDetail'
+        type: array
+      SaleId:
+        description: '--- Sale Fields ---'
+        type: string
+      SaleInspectorId:
+        type: string
+      SaleIsDiplomatic:
+        type: boolean
+      SaleMainAmount:
+        type: number
+      SalePayDate:
+        type: string
+      SalePayStatusId:
+        type: string
+      SalePayType:
+        type: string
+      SalePaymentType:
+        type: string
+      SalePrecinctId:
+        type: string
+      SaleVatAmount:
+        type: number
+      TransactionAmount:
+        type: number
+      TransactionBalanceBeforeSale:
+        type: number
+      TransactionComment:
+        type: string
+      TransactionDate:
+        type: string
+      TransactionId:
+        description: '--- Transaction Fields ---'
+        type: string
+      TransactionIsSale:
+        type: boolean
+      UserActive:
+        type: boolean
+      UserEmail:
+        type: string
+      UserFirstName:
+        type: string
+      UserId:
+        description: '--- User Fields ---'
+        type: string
+      UserLastName:
+        type: string
+      UserName:
+        type: string
+      UserPhone:
+        type: string
+      UserPrecinctId:
+        type: string
+      UserRegistrationDate:
+        type: string
+      UserStatusId:
+        type: string
+    type: object
+  models.AISRequest:
+    properties:
+      data:
+        allOf:
+        - $ref: '#/definitions/models.AISDocument'
+        description: Основные данные документа
+      id:
+        type: string
+      timestamp:
+        type: integer
+      type:
+        description: 'Тип документа: "sale", "return" и т.д.'
+        type: string
+    type: object
+  models.APIResponse:
+    properties:
+      error:
+        type: string
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
+  models.SaleDetail:
+    properties:
+      SaleDetailAmount:
+        type: number
+      SaleDetailId:
+        type: string
+      SaleDetailPrice:
+        type: number
+      SaleDetailQuantity:
+        type: number
+      SaleDetailSaleId:
+        type: string
+      SaleDetailServiceId:
+        type: string
+      SaleDetailTotalAmount:
+        type: number
+      SaleDetailVATAmount:
+        type: number
+      SaleDetailVATRate:
+        type: number
+      ServiceCode:
+        type: string
+      ServiceName:
+        description: Дополнительные поля по услуге
+        type: string
+      ServiceUnit:
+        type: string
+    type: object
+host: localhost:8081
+info:
+  contact:
+    email: support@example.com
+    name: API Support
+  description: Сервис интеграции AIS и 1С. Гарантированная доставка сообщений через
+    очередь.
+  termsOfService: http://swagger.io/terms/
+  title: AIS-1C Proxy API
+  version: "1.0"
+paths:
+  /data:
+    delete:
+      consumes:
+      - application/json
+      description: Принимает JSON пакет от AIS, ставит в очередь на отправку в 1С.
+      parameters:
+      - description: API Key
+        in: header
+        name: X-API-Key
+        required: true
+        type: string
+      - description: Пакет данных
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/models.AISRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      summary: Прием данных (Sale/Update/Delete)
+      tags:
+      - Integration
+    post:
+      consumes:
+      - application/json
+      description: Принимает JSON пакет от AIS, ставит в очередь на отправку в 1С.
+      parameters:
+      - description: API Key
+        in: header
+        name: X-API-Key
+        required: true
+        type: string
+      - description: Пакет данных
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/models.AISRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      summary: Прием данных (Sale/Update/Delete)
+      tags:
+      - Integration
+    put:
+      consumes:
+      - application/json
+      description: Принимает JSON пакет от AIS, ставит в очередь на отправку в 1С.
+      parameters:
+      - description: API Key
+        in: header
+        name: X-API-Key
+        required: true
+        type: string
+      - description: Пакет данных
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/models.AISRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      summary: Прием данных (Sale/Update/Delete)
+      tags:
+      - Integration
+securityDefinitions:
+  ApiKeyAuth:
+    in: header
+    name: X-API-Key
+    type: apiKey
+swagger: "2.0"

@@ -1,0 +1,7 @@
+﻿global:
+  scrape_interval: 2s # Опрашивать часто, так как нам важна скорость реакции
+
+scrape_configs:
+  - job_name: 'ais_1c_proxy'
+    static_configs:
+      - targets: ['127.0.0.1:8081']

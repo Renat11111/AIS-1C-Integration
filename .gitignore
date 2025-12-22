@@ -1,0 +1,22 @@
+﻿# Secrets
+.env
+
+# Database
+pb_data/
+
+# Build artifacts
+build/server.exe
+build/*.exe
+
+# Monitoring binaries
+monitoring/prometheus.exe
+monitoring/prometheus.zip
+monitoring/temp/
+
+# Logs
+*.log
+app.log
+
+# IDE
+.vscode/
+.idea/
