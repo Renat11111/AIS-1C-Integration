@@ -22,10 +22,12 @@ import (
 )
 
 const (
-	CollectionQueue = "integration_queue"
-	WorkerCount     = 5
-	BatchSize       = 50
-	ChannelBuffer   = 100
+	CollectionQueue   = "integration_queue"
+	WorkerCount       = 5
+	BatchSize         = 50
+	ChannelBuffer     = 100
+	MaxRetries        = 10               // Максимум попыток перед перемещением в DLQ (failed)
+	BaseRetryInterval = 1 * time.Minute // Начальный интервал повтора
 )
 
 type Service struct {
@@ -63,11 +65,14 @@ func (s *Service) EnsureQueueCollection() error {
 		&core.TextField{Name: "ais_id", Required: true},
 		&core.TextField{Name: "method", Required: true},
 		&core.JSONField{Name: "payload", Required: true},
-		&core.SelectField{Name: "status", MaxSelect: 1, Values: []string{"pending", "processing", "error"}},
+		&core.SelectField{Name: "status", MaxSelect: 1, Values: []string{"pending", "processing", "retry", "failed", "error"}},
 		&core.TextField{Name: "error_log"},
+		&core.NumberField{Name: "retry_count"},
+		&core.DateField{Name: "next_attempt"},
 	)
 	col.AddIndex("idx_status", false, "status", "")
 	col.AddIndex("idx_ais_id", true, "ais_id", "")
+	col.AddIndex("idx_next_attempt", false, "next_attempt", "")
 	return s.app.Save(col)
 }
 
@@ -125,15 +130,17 @@ func (s *Service) dispatcher(ctx context.Context) {
 }
 
 func (s *Service) fetchAndDispatch() {
-	totalPending, err := s.app.CountRecords(CollectionQueue, dbx.NewExp("status = 'pending'"))
-	if err == nil {
-		metrics.QueueDepth.Set(float64(totalPending))
-	}
+	// Считаем глубину очереди (ожидающие + повторы)
+	totalPending, _ := s.app.CountRecords(CollectionQueue, dbx.NewExp("status = 'pending' OR status = 'retry'"))
+	metrics.QueueDepth.Set(float64(totalPending))
+
+	// Фильтр: либо новые, либо те, кому пора сделать повтор
+	filter := "status = 'pending' || (status = 'retry' && next_attempt <= @now)"
 
 	records, err := s.app.FindRecordsByFilter(
 		CollectionQueue,
-		"status = 'pending'",
-		"",
+		filter,
+		"created",
 		s.cfg.BatchSize,
 		0,
 		nil,
@@ -147,7 +154,7 @@ func (s *Service) fetchAndDispatch() {
 		return
 	}
 
-	log.Debug().Int("count", len(records)).Msg("Dispatcher found pending records")
+	log.Debug().Int("count", len(records)).Msg("Dispatcher found tasks")
 
 	for _, record := range records {
 		record.Set("status", "processing")
@@ -176,24 +183,21 @@ func (s *Service) processRecord(ctx context.Context, workerID int, record *core.
 	timer := prometheus.NewTimer(metrics.WorkerDuration)
 	defer timer.ObserveDuration()
 
-	// Используем буфер из пула для десериализации (уменьшаем GC pressure)
 	buf := s.bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
 	defer s.bufPool.Put(buf)
 
 	var data models.AISDocument
 	
-	// Кодируем map прямо в буфер из пула
 	if err := json.NewEncoder(buf).Encode(record.Get("payload")); err != nil {
-		log.Error().Err(err).Str("record_id", record.Id).Msg("Failed to encode payload from DB")
-		s.markError(record, fmt.Errorf("payload encode error: %w", err))
+		log.Error().Err(err).Str("record_id", record.Id).Msg("Failed to encode payload")
+		s.handleError(record, fmt.Errorf("payload encode error: %w", err), true)
 		return
 	}
 
-	// Декодируем из того же буфера в структуру
 	if err := json.NewDecoder(buf).Decode(&data); err != nil {
-		log.Error().Err(err).Str("record_id", record.Id).Msg("Failed to decode payload to AISDocument")
-		s.markError(record, fmt.Errorf("payload decode error: %w", err))
+		log.Error().Err(err).Str("record_id", record.Id).Msg("Failed to decode payload")
+		s.handleError(record, fmt.Errorf("payload decode error: %w", err), true)
 		return
 	}
 
@@ -209,7 +213,7 @@ func (s *Service) processRecord(ctx context.Context, workerID int, record *core.
 
 	if err != nil {
 		log.Error().Err(err).Str("sale_id", req.Data.SaleId).Msg("Worker failed sync")
-		s.markError(record, err)
+		s.handleError(record, err, false)
 		metrics.ProcessedTotal.WithLabelValues("error", req.Method).Inc()
 	} else {
 		log.Info().Str("sale_id", req.Data.SaleId).Msg("Worker synced success. Deleting.")
@@ -218,9 +222,38 @@ func (s *Service) processRecord(ctx context.Context, workerID int, record *core.
 	}
 }
 
-func (s *Service) markError(record *core.Record, err error) {
-	record.Set("status", "error")
+func (s *Service) handleError(record *core.Record, err error, fatal bool) {
 	record.Set("error_log", err.Error())
+	
+	if fatal {
+		log.Error().Str("id", record.GetString("ais_id")).Msg("Moving record to DLQ due to fatal error")
+		record.Set("status", "failed")
+		s.app.Save(record)
+		return
+	}
+
+	retryCount := record.GetInt("retry_count")
+	if retryCount >= MaxRetries {
+		log.Warn().Str("id", record.GetString("ais_id")).Msg("Max retries reached. Moving to DLQ (failed).")
+		record.Set("status", "failed")
+	} else {
+		newCount := retryCount + 1
+		
+		// Используем логику backoff: интервал растет экспоненциально
+		// 1m, 2m, 4m, 8m, 16m... (до MaxRetries)
+		interval := BaseRetryInterval * (1 << (newCount - 1))
+		if interval > 24*time.Hour { // Ограничиваем сверху сутками
+			interval = 24 * time.Hour
+		}
+		
+		nextTry := time.Now().Add(interval)
+		
+		log.Info().Int("attempt", newCount).Time("next_try", nextTry).Str("id", record.GetString("ais_id")).Msg("Scheduling retry")
+		
+		record.Set("status", "retry")
+		record.Set("retry_count", newCount)
+		record.Set("next_attempt", nextTry)
+	}
 	s.app.Save(record)
 }
 
