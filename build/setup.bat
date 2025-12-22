@@ -102,4 +102,4 @@ if not exist "monitoring\dashboards" mkdir "monitoring\dashboards"
 
 echo.
 echo [SUCCESS] All systems ready! Run start.bat now.
-:: pause
+pause
