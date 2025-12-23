@@ -1,4 +1,4 @@
-﻿package models
+package models
 
 import (
 	"errors"
@@ -46,51 +46,51 @@ type SaleDetail struct {
 	SaleDetailVATRate     float64 `json:"SaleDetailVATRate"`
 	SaleDetailVATAmount   float64 `json:"SaleDetailVATAmount"`
 	SaleDetailTotalAmount float64 `json:"SaleDetailTotalAmount"`
-	
-	ServiceName           string  `json:"ServiceName,omitempty"`
-	ServiceCode           string  `json:"ServiceCode,omitempty"`
-	ServiceUnit           string  `json:"ServiceUnit,omitempty"`
+
+	ServiceName string `json:"ServiceName,omitempty"`
+	ServiceCode string `json:"ServiceCode,omitempty"`
+	ServiceUnit string `json:"ServiceUnit,omitempty"`
 }
 
 // AISDocument - Основная структура.
 type AISDocument struct {
 	// --- Sale Fields ---
-	SaleId            interface{} `json:"SaleId"`
-	SaleClientId      string      `json:"SaleClientId"`
-	SalePrecinctId    string      `json:"SalePrecinctId"`
-	SaleInspectorId   string      `json:"SaleInspectorId"`
-	
+	SaleId          interface{} `json:"SaleId"`
+	SaleClientId    string      `json:"SaleClientId"`
+	SalePrecinctId  string      `json:"SalePrecinctId"`
+	SaleInspectorId string      `json:"SaleInspectorId"`
+
 	// Enum: 1=NotPaid, 2=Paid, 3=Partial, 4=Cancelled, 5=Pending, 6=Return, etc.
-	SalePayStatusId   interface{} `json:"SalePayStatusId"` 
-	
-	SaleDate          string  `json:"SaleDate"` // Format: ISO8601 or YYYY-MM-DD HH:mm:ss
-	SaleDeclarationNo string  `json:"SaleDeclarationNo"`
-	SaleComment       string  `json:"SaleComment"` // Required for Cancellation (DELETE)
-	SaleIsDiplomatic  bool    `json:"SaleIsDiplomatic"`
-	SaleCarNumber     string  `json:"SaleCarNumber"`
-	
+	SalePayStatusId interface{} `json:"SalePayStatusId"`
+
+	SaleDate          string `json:"SaleDate"` // Format: ISO8601 or YYYY-MM-DD HH:mm:ss
+	SaleDeclarationNo string `json:"SaleDeclarationNo"`
+	SaleComment       string `json:"SaleComment"` // Required for Cancellation (DELETE)
+	SaleIsDiplomatic  bool   `json:"SaleIsDiplomatic"`
+	SaleCarNumber     string `json:"SaleCarNumber"`
+
 	// Enum: 0=None, 1=Avans, 3=Hop, 4=Vais, 5=Contract, 6=Manual, 7=Emanat, 8=Kocurme
-	SalePaymentType   string  `json:"SalePaymentType"`
-	
-	SalePayDate       string  `json:"SalePayDate"`
-	SalePayType       string  `json:"SalePayType"`
-	SaleMainAmount    float64 `json:"SaleMainAmount"`
-	SaleVatAmount     float64 `json:"SaleVatAmount"`
-	Privilege         string  `json:"Privilege"`
+	SalePaymentType string `json:"SalePaymentType"`
+
+	SalePayDate    string  `json:"SalePayDate"`
+	SalePayType    string  `json:"SalePayType"`
+	SaleMainAmount float64 `json:"SaleMainAmount"`
+	SaleVatAmount  float64 `json:"SaleVatAmount"`
+	Privilege      string  `json:"Privilege"`
 
 	// --- Array of Nomenclatures ---
 	Details []SaleDetail `json:"SaleDetails"`
 
 	// --- Client Fields ---
 	// Required: Id, Type, Voen, Name. Others are optional.
-	ClientId               string `json:"ClientId"`
-	
+	ClientId string `json:"ClientId"`
+
 	// Enum: 1=Legal, 2=Resident, 3=NonResident
-	ClientClientTypeId     string `json:"ClientClientTypeId"`
-	
+	ClientClientTypeId string `json:"ClientClientTypeId"`
+
 	ClientVOENOrPassportNo string `json:"ClientVOENOrPassportNo"`
 	ClientFullName         string `json:"ClientFullName"`
-	
+
 	ClientEmail            string `json:"ClientEmail,omitempty"`
 	ClientPhone            string `json:"ClientPhone,omitempty"`
 	ClientFieldOfActivity  string `json:"ClientFieldOfActivity,omitempty"`
@@ -105,12 +105,12 @@ type AISDocument struct {
 
 	// --- User Fields ---
 	// Required for Cancellation: UserId
-	UserId               string `json:"UserId"`
-	UserPrecinctId       string `json:"UserPrecinctId"`
-	
+	UserId         string `json:"UserId"`
+	UserPrecinctId string `json:"UserPrecinctId"`
+
 	// Enum: 1=SuperAdmin, 2=Accountant, 3=Inspector, ...
-	UserStatusId         string `json:"UserStatusId"`
-	
+	UserStatusId string `json:"UserStatusId"`
+
 	UserRegistrationDate string `json:"UserRegistrationDate"`
 	UserName             string `json:"UserName"`
 	UserFirstName        string `json:"UserFirstName"`

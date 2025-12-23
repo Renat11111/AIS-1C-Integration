@@ -1,4 +1,4 @@
-﻿package rest
+package rest
 
 import (
 	"bytes"
@@ -38,7 +38,7 @@ func setupTestEnv(t *testing.T) (*pocketbase.PocketBase, *onec.Service, string) 
 		OneCTimeout: 1 * time.Second,
 	}
 	service := onec.NewService(app, cfg)
-	
+
 	if err := service.EnsureQueueCollection(); err != nil {
 		t.Fatal("Failed to create collection:", err)
 	}
@@ -48,7 +48,7 @@ func setupTestEnv(t *testing.T) (*pocketbase.PocketBase, *onec.Service, string) 
 
 func TestReceiveData_Success(t *testing.T) {
 	app, service, tempDir := setupTestEnv(t)
-	defer os.RemoveAll(tempDir) 
+	defer os.RemoveAll(tempDir)
 
 	handler := NewHandler(service)
 	cfg := &config.Config{AISToken: "test-token"}
@@ -58,7 +58,7 @@ func TestReceiveData_Success(t *testing.T) {
 		ID:     "test-msg-001",
 		Method: "POST",
 		Data: models.AISDocument{
-			SaleId: "sale-123",
+			SaleId:         "sale-123",
 			SaleMainAmount: 1000.50,
 		},
 	}
@@ -69,7 +69,7 @@ func TestReceiveData_Success(t *testing.T) {
 	req.Header.Set("X-API-Key", "test-token")
 
 	rr := httptest.NewRecorder()
-	
+
 	authMw(http.HandlerFunc(handler.ReceiveData)).ServeHTTP(rr, req)
 
 	if status := rr.Code; status != http.StatusOK {
@@ -84,7 +84,7 @@ func TestReceiveData_Success(t *testing.T) {
 	if record.GetString("status") != "pending" {
 		t.Errorf("Expected status 'pending', got '%s'", record.GetString("status"))
 	}
-	
+
 	payload := record.Get("payload")
 	if payload == nil {
 		t.Error("Payload is empty in DB")
@@ -115,7 +115,7 @@ func TestReceiveData_Duplicate(t *testing.T) {
 	defer os.RemoveAll(tempDir)
 
 	handler := NewHandler(service)
-	
+
 	col, _ := app.FindCollectionByNameOrId(onec.CollectionQueue)
 	rec := core.NewRecord(col)
 	rec.Set("ais_id", "duplicate-id")
@@ -126,16 +126,16 @@ func TestReceiveData_Duplicate(t *testing.T) {
 
 	reqBody := models.AISRequest{ID: "duplicate-id", Data: models.AISDocument{SaleId: "1"}}
 	jsonBody, _ := json.Marshal(reqBody)
-	
+
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/data", bytes.NewBuffer(jsonBody))
 	rr := httptest.NewRecorder()
-	
+
 	handler.ReceiveData(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Errorf("Expected 200 OK on duplicate, got %v", rr.Code)
 	}
-	
+
 	total, _ := app.CountRecords(onec.CollectionQueue, nil)
 	if total != 1 {
 		t.Errorf("Expected 1 record in DB, got %d", total)

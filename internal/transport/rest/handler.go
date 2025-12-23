@@ -1,4 +1,4 @@
-﻿package rest
+package rest
 
 import (
 	"ais-1c-proxy/internal/config"
@@ -60,7 +60,7 @@ func (h *Handler) ReceiveData(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Явно устанавливаем метод из HTTP (источник истины)
-	req.Method = r.Method 
+	req.Method = r.Method
 
 	if err := h.service.Push(req); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)

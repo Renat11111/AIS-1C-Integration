@@ -1,4 +1,4 @@
-﻿package main
+package main
 
 import (
 	"context"
@@ -9,9 +9,9 @@ import (
 	"ais-1c-proxy/internal/middleware"
 	"ais-1c-proxy/internal/service/onec"
 	"ais-1c-proxy/internal/transport/rest"
-	
-	"github.com/natefinch/lumberjack"
+
 	_ "ais-1c-proxy/docs"
+	"github.com/natefinch/lumberjack"
 
 	"github.com/mattn/go-colorable"
 	"github.com/pocketbase/pocketbase"
@@ -39,13 +39,13 @@ func main() {
 		MaxAge:     28,   // days
 		Compress:   true, // disabled by default
 	}
-	
+
 	// В консоль - красиво и с цветами, в файл - JSON
 	consoleWriter := zerolog.ConsoleWriter{
 		Out:        colorable.NewColorableStdout(),
 		TimeFormat: "15:04:05",
 	}
-	
+
 	multi := zerolog.MultiLevelWriter(consoleWriter, logRotation)
 	log.Logger = zerolog.New(multi).With().Timestamp().Logger()
 
@@ -72,8 +72,8 @@ func main() {
 		// Регистрируем хук для Graceful Shutdown
 		app.OnTerminate().BindFunc(func(te *core.TerminateEvent) error {
 			log.Info().Msg("🛑 Shutdown signal received. Stopping workers...")
-			workerCancel()      // Сигнализируем воркерам остановиться
-			onecService.Wait()  // Ждем их завершения
+			workerCancel()     // Сигнализируем воркерам остановиться
+			onecService.Wait() // Ждем их завершения
 			log.Info().Msg("✅ All workers stopped. Exiting.")
 			return te.Next()
 		})
@@ -127,7 +127,7 @@ func main() {
 		fmt.Printf("  \033[1;34m➜ Grafana:\033[0m  http://localhost:3000 (admin/admin)\n")
 		fmt.Printf("  \033[1;34m➜ Prometheus:\033[0m http://localhost:9090\n")
 		fmt.Println("\033[1;32m=====================================================\033[0m\n")
-		
+
 		return e.Next()
 	})
 

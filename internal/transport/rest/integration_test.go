@@ -37,11 +37,11 @@ func setupIntegration(t *testing.T) (*pocketbase.PocketBase, *onec.Service, stri
 	cfg := &config.Config{
 		AISToken:    "test-secret",
 		OneCTimeout: 500 * time.Millisecond,
-		WorkerCount: 1, 
-		BatchSize:   1, 
+		WorkerCount: 1,
+		BatchSize:   1,
 	}
 	service := onec.NewService(app, cfg)
-	
+
 	if err := service.EnsureQueueCollection(); err != nil {
 		t.Fatal("Failed to create collection:", err)
 	}
@@ -71,7 +71,7 @@ func TestIntegration_FullFlow(t *testing.T) {
 		req.Header.Set("X-API-Key", "test-secret")
 		rr := httptest.NewRecorder()
 		authMw(http.HandlerFunc(handler.ReceiveData)).ServeHTTP(rr, req)
-		
+
 		if rr.Code != http.StatusOK {
 			t.Fatalf("API request failed: %v", rr.Body.String())
 		}
@@ -113,11 +113,11 @@ func TestIntegration_CircuitBreaker(t *testing.T) {
 		Method: "POST",
 		Data:   models.AISDocument{SaleId: "OK"},
 	}
-	
+
 	if err := service.Push(normalReq); err != nil {
 		t.Fatalf("Push failed: %v", err)
 	}
-	
+
 	time.Sleep(1 * time.Second)
 
 	updated, err := app.FindFirstRecordByFilter(onec.CollectionQueue, "ais_id = 'normal-one'")
@@ -127,10 +127,10 @@ func TestIntegration_CircuitBreaker(t *testing.T) {
 
 	// Если CB разомкнут, задача должна сразу уйти в 'retry' с логом 'circuit breaker is open'
 	if updated.GetString("status") != "retry" {
-		t.Errorf("Expected status 'retry' due to CB Open, got '%s'. ErrorLog: %s", 
+		t.Errorf("Expected status 'retry' due to CB Open, got '%s'. ErrorLog: %s",
 			updated.GetString("status"), updated.GetString("error_log"))
 	}
-	
+
 	if updated.GetString("error_log") != "circuit breaker is open" {
 		t.Errorf("Expected error log 'circuit breaker is open', got '%s'", updated.GetString("error_log"))
 	}

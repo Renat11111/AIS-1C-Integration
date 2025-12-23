@@ -1,4 +1,4 @@
-﻿package onec
+package onec
 
 import (
 	"bytes"
@@ -11,15 +11,15 @@ import (
 	"time"
 
 	"ais-1c-proxy/internal/config"
-	"ais-1c-proxy/internal/models"
 	"ais-1c-proxy/internal/metrics"
+	"ais-1c-proxy/internal/models"
 
 	"github.com/cenkalti/backoff/v4"
+	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
-	"github.com/rs/zerolog/log"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/pocketbase/dbx"
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -27,9 +27,9 @@ const (
 	WorkerCount       = 5
 	BatchSize         = 50
 	ChannelBuffer     = 100
-	MaxRetries        = 10               // Максимум попыток перед перемещением в DLQ (failed)
+	MaxRetries        = 10              // Максимум попыток перед перемещением в DLQ (failed)
 	BaseRetryInterval = 1 * time.Minute // Начальный интервал повтора
-	
+
 	// Circuit Breaker Config
 	CBFailureThreshold = 5                // Сколько ошибок подряд до размыкания
 	CBOpenDuration     = 30 * time.Second // Сколько ждать перед попыткой восстановления
@@ -49,7 +49,7 @@ type Service struct {
 	client  *http.Client
 	bufPool sync.Pool
 	jobs    chan []*core.Record // Теперь передаем пачки записей
-	notify  chan struct{}        // Канал для пробуждения диспетчера
+	notify  chan struct{}       // Канал для пробуждения диспетчера
 	wg      sync.WaitGroup
 
 	// Circuit Breaker State
@@ -66,7 +66,7 @@ func NewService(app *pocketbase.PocketBase, cfg *config.Config) *Service {
 		client: &http.Client{Timeout: cfg.OneCTimeout},
 		bufPool: sync.Pool{
 			New: func() interface{} {
-				return bytes.NewBuffer(make([]byte, 0, 4096*10)) // Пул побольше для батчей
+				return bytes.NewBuffer(make([]byte, 0, 4096)) // 4KB достаточно для одного инвойса
 			},
 		},
 		jobs:    make(chan []*core.Record, ChannelBuffer),
@@ -76,8 +76,8 @@ func NewService(app *pocketbase.PocketBase, cfg *config.Config) *Service {
 }
 
 func (s *Service) getCBState() CBState {
-// ... (оставляем без изменений)
- s.cbMu.RLock()
+	// ... (оставляем без изменений)
+	s.cbMu.RLock()
 	defer s.cbMu.RUnlock()
 
 	if s.cbState == StateOpen {
@@ -108,7 +108,7 @@ func (s *Service) recordCBFailure() {
 }
 
 func (s *Service) EnsureQueueCollection() error {
-// ... (оставляем без изменений)
+	// ... (оставляем без изменений)
 	col, err := s.app.FindCollectionByNameOrId(CollectionQueue)
 	if err != nil {
 		log.Info().Msg("Bootstrap: Creating 'integration_queue' collection...")
@@ -189,7 +189,7 @@ func (s *Service) Push(req models.AISRequest) error {
 	record.Set("method", req.Method)
 	record.Set("payload", req.Data)
 	record.Set("status", "pending")
-	
+
 	if err := s.app.Save(record); err != nil {
 		return err
 	}
@@ -210,7 +210,7 @@ func (s *Service) StartBackgroundWorker(ctx context.Context) {
 		go s.worker(ctx, i)
 	}
 	log.Info().Int("count", s.cfg.WorkerCount).Msg("Started 1C integration workers")
-	
+
 	s.wg.Add(1)
 	go s.dispatcher(ctx)
 }
@@ -223,37 +223,58 @@ func (s *Service) Wait() {
 
 func (s *Service) dispatcher(ctx context.Context) {
 	defer s.wg.Done()
-	log.Info().Msg("Started DB Dispatcher (Event-driven)")
-	
-	// Таймер теперь может быть реже (например, 5 сек), 
-	// так как новые записи будят диспетчер через s.notify
-	ticker := time.NewTicker(5 * time.Second)
-	defer ticker.Stop()
-
-	// Первичный запуск
-	s.fetchAndDispatch()
+	log.Info().Msg("Started DB Dispatcher (Pure Event-driven)")
 
 	for {
+		// 1. Обрабатываем то, что готово прямо сейчас
+		processed := s.fetchAndDispatch()
+
+		// 2. Если обработали полную пачку, возможно есть еще - идем на новый круг немедленно
+		if processed >= s.cfg.BatchSize {
+			continue
+		}
+
+		// 3. Выясняем, когда проснуться в следующий раз
+		// По умолчанию спим 1 минуту (как watchdog), если задач нет
+		waitDuration := 1 * time.Minute
+
+		// Ищем время ближайшего повтора
+		var nextAttemptStr string
+		err := s.app.DB().Select("MIN(next_attempt)").
+			From(CollectionQueue).
+			Where(dbx.NewExp("status = 'retry'")).
+			Row(&nextAttemptStr)
+
+		if err == nil && nextAttemptStr != "" {
+			// PocketBase возвращает время в формате UTC
+			nextTime, parseErr := time.Parse("2006-01-02 15:04:05.000Z", nextAttemptStr)
+			if parseErr == nil {
+				waitDuration = time.Until(nextTime)
+				if waitDuration < 0 {
+					waitDuration = 0 // Уже пора было запустить
+				}
+				// Ограничиваем ожидание 1 минутой на случай правок в Admin UI
+				if waitDuration > 1*time.Minute {
+					waitDuration = 1 * time.Minute
+				}
+			}
+		}
+
+		timer := time.NewTimer(waitDuration)
+
 		select {
 		case <-ctx.Done():
+			timer.Stop()
 			log.Info().Msg("Dispatcher stopping...")
 			return
 		case <-s.notify:
-			// Проснулись по сигналу о новой записи
-			if count := s.fetchAndDispatch(); count >= s.cfg.BatchSize {
-				// Если пачка была полной, возможно там есть еще - проверяем сразу
-				select {
-				case s.notify <- struct{}{}:
-				default:
-				}
-			}
-		case <-ticker.C:
-			// Проснулись по времени (для повторов)
-			s.fetchAndDispatch()
+			timer.Stop()
+			// Проснулись по сигналу о новых данных
+		case <-timer.C:
+			// Наступило время запланированного повтора
 		}
 	}
 }
-
 func (s *Service) fetchAndDispatch() int {
 	// Считаем глубину очереди (ожидающие + повторы)
 	totalPending, _ := s.app.CountRecords(CollectionQueue, dbx.NewExp("status = 'pending' OR status = 'retry'"))
@@ -293,7 +314,7 @@ func (s *Service) fetchAndDispatch() int {
 
 	// Отправляем всю пачку в канал как ОДНУ задачу для воркера
 	s.jobs <- records
-	
+
 	return count
 }
 
@@ -336,10 +357,10 @@ func (s *Service) processBatch(ctx context.Context, workerID int, records []*cor
 	batchRequests := make([]models.AISRequest, 0, len(records))
 	for _, record := range records {
 		var payloadData models.AISDocument
-		
+
 		// Очищаем буфер для каждой записи в батче
 		buf.Reset()
-		
+
 		// Кодируем payload из записи в буфер
 		if err := json.NewEncoder(buf).Encode(record.Get("payload")); err != nil {
 			log.Error().Err(err).Str("record_id", record.Id).Msg("Failed to encode payload in batch")
@@ -390,9 +411,9 @@ func (s *Service) processBatch(ctx context.Context, workerID int, records []*cor
 }
 
 func (s *Service) handleError(record *core.Record, err error, fatal bool) {
-// ... (оставляем без изменений)
+	// ... (оставляем без изменений)
 	record.Set("error_log", err.Error())
-	
+
 	if fatal {
 		log.Error().Str("id", record.GetString("ais_id")).Msg("Moving record to DLQ due to fatal error")
 		record.Set("status", "failed")
@@ -406,18 +427,18 @@ func (s *Service) handleError(record *core.Record, err error, fatal bool) {
 		record.Set("status", "failed")
 	} else {
 		newCount := retryCount + 1
-		
+
 		// Используем логику backoff: интервал растет экспоненциально
 		// 1m, 2m, 4m, 8m, 16m... (до MaxRetries)
 		interval := BaseRetryInterval * (1 << (newCount - 1))
 		if interval > 24*time.Hour { // Ограничиваем сверху сутками
 			interval = 24 * time.Hour
 		}
-		
+
 		nextTry := time.Now().Add(interval)
-		
+
 		log.Info().Int("attempt", newCount).Time("next_try", nextTry).Str("id", record.GetString("ais_id")).Msg("Scheduling retry")
-		
+
 		record.Set("status", "retry")
 		record.Set("retry_count", newCount)
 		record.Set("next_attempt", nextTry)
@@ -470,13 +491,13 @@ func (s *Service) sendBatchToOneC(ctx context.Context, requests []models.AISRequ
 
 	// Имитируем сетевую задержку на обработку пакета
 	time.Sleep(500 * time.Millisecond)
-	
+
 	// Тестовая логика: если хотя бы в одном ID есть "fail", весь батч падает
 	for _, req := range requests {
 		if strings.Contains(req.ID, "fail") {
 			return fmt.Errorf("1C Batch Error: request %s failed (Simulated)", req.ID)
 		}
 	}
-	
+
 	return nil
 }

@@ -1,4 +1,4 @@
-﻿package middleware
+package middleware
 
 import (
 	"ais-1c-proxy/internal/config"

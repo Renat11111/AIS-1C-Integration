@@ -18,14 +18,14 @@ var (
 )
 
 type Config struct {
-	ServerPort    string
-	AISToken      string
-	OneCBaseURL   string
-	OneCUser      string // Логин 1С
-	OneCPassword  string // Пароль 1С
-	OneCTimeout   time.Duration
-	WorkerCount   int
-	BatchSize     int
+	ServerPort   string
+	AISToken     string
+	OneCBaseURL  string
+	OneCUser     string // Логин 1С
+	OneCPassword string // Пароль 1С
+	OneCTimeout  time.Duration
+	WorkerCount  int
+	BatchSize    int
 }
 
 func Load() *Config {
@@ -33,7 +33,7 @@ func Load() *Config {
 	cwd, _ := os.Getwd()
 	exePath, _ := os.Executable()
 	exeDir := filepath.Dir(exePath)
-	
+
 	log.Debug().Str("cwd", cwd).Str("exe_dir", exeDir).Msg("Config loading started")
 
 	// 1. Попытка загрузить .env из текущей директории
@@ -53,14 +53,14 @@ func Load() *Config {
 	}
 
 	cfg := &Config{
-		ServerPort:    getEnv("SERVER_PORT", ":8081"),
-		AISToken:      getEnv("AIS_TOKEN", ""),
-		OneCBaseURL:   getEnv("ONEC_BASE_URL", "http://localhost/base/hs/ais/v1/data"),
-		OneCUser:      getEnv("ONEC_USER", ""),
-		OneCPassword:  getEnv("ONEC_PASSWORD", ""),
-		OneCTimeout:   15 * time.Second,
-		WorkerCount:   getEnvAsInt("WORKER_COUNT", 5),
-		BatchSize:     getEnvAsInt("BATCH_SIZE", 50),
+		ServerPort:   getEnv("SERVER_PORT", ":8081"),
+		AISToken:     getEnv("AIS_TOKEN", ""),
+		OneCBaseURL:  getEnv("ONEC_BASE_URL", "http://localhost/base/hs/ais/v1/data"),
+		OneCUser:     getEnv("ONEC_USER", ""),
+		OneCPassword: getEnv("ONEC_PASSWORD", ""),
+		OneCTimeout:  15 * time.Second,
+		WorkerCount:  getEnvAsInt("WORKER_COUNT", 5),
+		BatchSize:    getEnvAsInt("BATCH_SIZE", 50),
 	}
 
 	// Log loaded token (masked) to verify
