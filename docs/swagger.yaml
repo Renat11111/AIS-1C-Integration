@@ -86,7 +86,6 @@ definitions:
         type: array
       SaleId:
         description: '--- Sale Fields ---'
-        type: string
       SaleInspectorId:
         type: string
       SaleIsDiplomatic:
@@ -98,7 +97,6 @@ definitions:
       SalePayStatusId:
         description: 'Enum: 1=NotPaid, 2=Paid, 3=Partial, 4=Cancelled, 5=Pending,
           6=Return, etc.'
-        type: string
       SalePayType:
         type: string
       SalePaymentType:
@@ -148,6 +146,7 @@ definitions:
     type: object
   models.APIResponse:
     properties:
+      data: {}
       error:
         type: string
       message:
@@ -268,44 +267,6 @@ paths:
       summary: Прием данных (Sale/Update/Delete)
       tags:
       - Integration
-    put:
-      consumes:
-      - application/json
-      description: Принимает JSON пакет от AIS, ставит в очередь на отправку в 1С.
-      parameters:
-      - description: API Key
-        in: header
-        name: X-API-Key
-        required: true
-        type: string
-      - description: Пакет данных
-        in: body
-        name: body
-        required: true
-        schema:
-          $ref: '#/definitions/models.AISRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.APIResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/models.APIResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/models.APIResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/models.APIResponse'
-      summary: Прием данных (Sale/Update/Delete)
-      tags:
-      - Integration
   /v1/health:
     get:
       description: Проверяет доступность сервиса
@@ -317,6 +278,30 @@ paths:
           schema:
             $ref: '#/definitions/models.APIResponse'
       summary: Health Check
+      tags:
+      - System
+  /v1/queue/retry-failed:
+    post:
+      description: Находит все задачи в статусе failed и возвращает их в очередь (статус
+        pending)
+      parameters:
+      - description: API Key
+        in: header
+        name: X-API-Key
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      summary: Перезапуск упавших задач
       tags:
       - System
 swagger: "2.0"

@@ -49,6 +49,8 @@ func main() {
 	multi := zerolog.MultiLevelWriter(consoleWriter, logRotation)
 	log.Logger = zerolog.New(multi).With().Timestamp().Logger()
 
+	log.Info().Msg("🚀 AIS-1C Proxy initialization started...")
+
 	app := pocketbase.New()
 	cfg := config.Load()
 
@@ -92,7 +94,6 @@ func main() {
 		}
 
 		e.Router.POST("/api/v1/data", apiHandler)
-		e.Router.PUT("/api/v1/data", apiHandler)
 		e.Router.DELETE("/api/v1/data", apiHandler)
 		e.Router.POST("/api/v1/queue/retry-failed", retryHandler) // Используем apiHandler так как он содержит Auth + RetryLogic
 

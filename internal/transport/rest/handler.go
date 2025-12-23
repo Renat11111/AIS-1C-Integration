@@ -31,10 +31,9 @@ func NewHandler(service *onec.Service) *Handler {
 // @Failure      401  {object}  models.APIResponse
 // @Failure      500  {object}  models.APIResponse
 // @Router       /v1/data [post]
-// @Router       /v1/data [put]
 // @Router       /v1/data [delete]
 func (h *Handler) ReceiveData(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost && r.Method != http.MethodPut && r.Method != http.MethodDelete {
+	if r.Method != http.MethodPost && r.Method != http.MethodDelete {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}

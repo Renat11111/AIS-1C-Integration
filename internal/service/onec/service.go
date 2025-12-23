@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -14,7 +15,6 @@ import (
 	"ais-1c-proxy/internal/metrics"
 	"ais-1c-proxy/internal/models"
 
-	"github.com/cenkalti/backoff/v4"
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase"
 	"github.com/pocketbase/pocketbase/core"
@@ -154,8 +154,9 @@ func (s *Service) EnsureQueueCollection() error {
 	for _, idx := range indexes {
 		exists := false
 		for _, existingIdx := range col.Indexes {
-			// В PocketBase v0.35 индексы проверяются по строковому представлению или имени
-			if existingIdx == idx.name {
+			// В PocketBase v0.35 индексы - это массив строк (CREATE INDEX...)
+			// Проверяем, содержится ли имя нашего индекса в этой строке
+			if strings.Contains(existingIdx, idx.name) {
 				exists = true
 				break
 			}
@@ -168,9 +169,39 @@ func (s *Service) EnsureQueueCollection() error {
 	}
 
 	if modified || col.Id == "" {
-		return s.app.Save(col)
+		if err := s.app.Save(col); err != nil {
+			return err
+		}
 	}
 
+	return s.RecoverStuckRecords()
+}
+
+// RecoverStuckRecords возвращает записи из 'processing' в 'pending' при старте
+func (s *Service) RecoverStuckRecords() error {
+	records, err := s.app.FindRecordsByFilter(
+		CollectionQueue,
+		"status = 'processing'",
+		"created",
+		0,
+		0,
+		nil,
+	)
+	if err != nil {
+		return err
+	}
+
+	if len(records) == 0 {
+		return nil
+	}
+
+	log.Info().Int("count", len(records)).Msg("🛠️ Recovery: Resetting stuck 'processing' records to 'pending'")
+	for _, r := range records {
+		r.Set("status", "pending")
+		if err := s.app.Save(r); err != nil {
+			log.Error().Err(err).Str("id", r.Id).Msg("Failed to recover record")
+		}
+	}
 	return nil
 }
 
@@ -280,8 +311,11 @@ func (s *Service) fetchAndDispatch() int {
 	totalPending, _ := s.app.CountRecords(CollectionQueue, dbx.NewExp("status = 'pending' OR status = 'retry'"))
 	metrics.QueueDepth.Set(float64(totalPending))
 
-	// Фильтр: либо новые, либо те, кому пора сделать повтор
-	filter := "status = 'pending' || (status = 'retry' && next_attempt <= @now)"
+	// Вычисляем время 10 минут назад для поиска зависших в 'processing'
+	stuckTime := time.Now().Add(-10 * time.Minute).Format("2006-01-02 15:04:05.000Z")
+
+	// Фильтр: новые, повторы по времени, или зависшие в processing более 10 минут
+	filter := fmt.Sprintf("status = 'pending' || (status = 'retry' && next_attempt <= @now) || (status = 'processing' && updated <= '%s')", stuckTime)
 
 	records, err := s.app.FindRecordsByFilter(
 		CollectionQueue,
@@ -368,8 +402,10 @@ func (s *Service) processBatch(ctx context.Context, workerID int, records []*cor
 			continue
 		}
 
-		// Декодируем из буфера в структуру
-		if err := json.NewDecoder(buf).Decode(&payloadData); err != nil {
+		// Декодируем из буфера в структуру с использованием UseNumber
+		decoder := json.NewDecoder(buf)
+		decoder.UseNumber()
+		if err := decoder.Decode(&payloadData); err != nil {
 			log.Error().Err(err).Str("record_id", record.Id).Msg("Failed to decode payload in batch")
 			s.handleError(record, err, true)
 			continue
@@ -386,9 +422,8 @@ func (s *Service) processBatch(ctx context.Context, workerID int, records []*cor
 		return
 	}
 
-	// Для логов берем SaleId первой записи
-	firstSaleID := fmt.Sprintf("%v", batchRequests[0].Data.SaleId)
-	log.Info().Int("worker", workerID).Int("batch_size", len(batchRequests)).Str("first_sale_id", firstSaleID).Msg("🚀 Processing batch")
+	// Для логов берем SaleId первой записи (теперь это json.Number или string)
+	log.Info().Int("worker", workerID).Int("batch_size", len(batchRequests)).Any("first_sale_id", batchRequests[0].Data.SaleId).Msg("🚀 Processing batch")
 
 	// 3. Отправляем ПАКЕТ в 1С
 	err := s.sendBatchToOneC(ctx, batchRequests)
@@ -404,7 +439,9 @@ func (s *Service) processBatch(ctx context.Context, workerID int, records []*cor
 		log.Info().Int("batch_size", len(batchRequests)).Msg("✅ Batch sync success")
 		s.recordCBSuccess()
 		for _, r := range records {
-			s.app.Delete(r)
+			if err := s.app.Delete(r); err != nil {
+				log.Error().Err(err).Str("record_id", r.Id).Msg("🔥 Failed to delete record from queue after success!")
+			}
 			metrics.ProcessedTotal.WithLabelValues("success", "batch").Inc()
 		}
 	}
@@ -486,17 +523,64 @@ func (s *Service) RetryFailedTasks() (int, error) {
 }
 
 func (s *Service) sendBatchToOneC(ctx context.Context, requests []models.AISRequest) error {
-	// В будущем здесь будет использоваться backoff для повторных попыток на уровне HTTP
-	_ = backoff.NewExponentialBackOff()
+	if len(requests) == 0 {
+		return nil
+	}
 
-	// Имитируем сетевую задержку на обработку пакета
-	time.Sleep(500 * time.Millisecond)
-
-	// Тестовая логика: если хотя бы в одном ID есть "fail", весь батч падает
+	// 1. Тестовая логика имитации ошибок (для дашборда)
 	for _, req := range requests {
 		if strings.Contains(req.ID, "fail") {
 			return fmt.Errorf("1C Batch Error: request %s failed (Simulated)", req.ID)
 		}
+	}
+
+	// 2. Группируем запросы по методам (1С ожидает POST и DELETE на разных обработчиках)
+	batchesByMethod := make(map[string][]models.AISRequest)
+	for _, r := range requests {
+		batchesByMethod[r.Method] = append(batchesByMethod[r.Method], r)
+	}
+
+	// 3. Отправляем каждую группу отдельным HTTP запросом
+	for method, batch := range batchesByMethod {
+		if err := s.doHttpRequest(ctx, method, batch); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *Service) doHttpRequest(ctx context.Context, method string, batch []models.AISRequest) error {
+	// Берем буфер из пула для маршалинга всей пачки
+	buf := s.bufPool.Get().(*bytes.Buffer)
+	buf.Reset()
+	defer s.bufPool.Put(buf)
+
+	if err := json.NewEncoder(buf).Encode(batch); err != nil {
+		return fmt.Errorf("failed to encode batch JSON: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, s.cfg.OneCBaseURL, buf)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Настройка заголовков
+	req.Header.Set("Content-Type", "application/json; charset=utf-8")
+	if s.cfg.OneCUser != "" {
+		req.SetBasicAuth(s.cfg.OneCUser, s.cfg.OneCPassword)
+	}
+
+	res, err := s.client.Do(req)
+	if err != nil {
+		return fmt.Errorf("1C connection error: %w", err)
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		// Читаем тело ошибки от 1С для логов
+		errBody, _ := io.ReadAll(res.Body)
+		return fmt.Errorf("1C returned error status: %d, body: %s", res.StatusCode, string(errBody))
 	}
 
 	return nil

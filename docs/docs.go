@@ -18,63 +18,6 @@ const docTemplate = `{
     "basePath": "{{.BasePath}}",
     "paths": {
         "/v1/data": {
-            "put": {
-                "description": "Принимает JSON пакет от AIS, ставит в очередь на отправку в 1С.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "Integration"
-                ],
-                "summary": "Прием данных (Sale/Update/Delete)",
-                "parameters": [
-                    {
-                        "type": "string",
-                        "description": "API Key",
-                        "name": "X-API-Key",
-                        "in": "header",
-                        "required": true
-                    },
-                    {
-                        "description": "Пакет данных",
-                        "name": "body",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/models.AISRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/models.APIResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/models.APIResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "Unauthorized",
-                        "schema": {
-                            "$ref": "#/definitions/models.APIResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/models.APIResponse"
-                        }
-                    }
-                }
-            },
             "post": {
                 "description": "Принимает JSON пакет от AIS, ставит в очередь на отправку в 1С.",
                 "consumes": [
@@ -209,6 +152,41 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/v1/queue/retry-failed": {
+            "post": {
+                "description": "Находит все задачи в статусе failed и возвращает их в очередь (статус pending)",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "System"
+                ],
+                "summary": "Перезапуск упавших задач",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "API Key",
+                        "name": "X-API-Key",
+                        "in": "header",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/models.APIResponse"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -329,8 +307,7 @@ const docTemplate = `{
                     }
                 },
                 "SaleId": {
-                    "description": "--- Sale Fields ---",
-                    "type": "string"
+                    "description": "--- Sale Fields ---"
                 },
                 "SaleInspectorId": {
                     "type": "string"
@@ -345,8 +322,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "SalePayStatusId": {
-                    "description": "Enum: 1=NotPaid, 2=Paid, 3=Partial, 4=Cancelled, 5=Pending, 6=Return, etc.",
-                    "type": "string"
+                    "description": "Enum: 1=NotPaid, 2=Paid, 3=Partial, 4=Cancelled, 5=Pending, 6=Return, etc."
                 },
                 "SalePayType": {
                     "type": "string"
@@ -416,6 +392,7 @@ const docTemplate = `{
         "models.APIResponse": {
             "type": "object",
             "properties": {
+                "data": {},
                 "error": {
                     "type": "string"
                 },
