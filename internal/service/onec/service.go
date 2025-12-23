@@ -36,6 +36,7 @@ type Service struct {
 	client  *http.Client
 	bufPool sync.Pool
 	jobs    chan *core.Record
+	notify  chan struct{} // Канал для пробуждения диспетчера
 	wg      sync.WaitGroup
 }
 
@@ -49,19 +50,23 @@ func NewService(app *pocketbase.PocketBase, cfg *config.Config) *Service {
 				return bytes.NewBuffer(make([]byte, 0, 4096))
 			},
 		},
-		jobs: make(chan *core.Record, ChannelBuffer),
+		jobs:   make(chan *core.Record, ChannelBuffer),
+		notify: make(chan struct{}, 1), // Буферизованный канал, чтобы не блокировать Push
 	}
 }
 
 func (s *Service) EnsureQueueCollection() error {
-	_, err := s.app.FindCollectionByNameOrId(CollectionQueue)
-	if err == nil {
-		return nil
+	col, err := s.app.FindCollectionByNameOrId(CollectionQueue)
+	if err != nil {
+		log.Info().Msg("Bootstrap: Creating 'integration_queue' collection...")
+		col = core.NewBaseCollection(CollectionQueue)
+		col.Type = core.CollectionTypeBase
+	} else {
+		log.Debug().Msg("Bootstrap: Checking 'integration_queue' fields...")
 	}
-	log.Info().Msg("Bootstrap: Creating 'integration_queue' collection...")
-	col := core.NewBaseCollection(CollectionQueue)
-	col.Type = core.CollectionTypeBase
-	col.Fields.Add(
+
+	// Список полей, которые должны быть в коллекции
+	requiredFields := []core.Field{
 		&core.TextField{Name: "ais_id", Required: true},
 		&core.TextField{Name: "method", Required: true},
 		&core.JSONField{Name: "payload", Required: true},
@@ -69,11 +74,51 @@ func (s *Service) EnsureQueueCollection() error {
 		&core.TextField{Name: "error_log"},
 		&core.NumberField{Name: "retry_count"},
 		&core.DateField{Name: "next_attempt"},
-	)
-	col.AddIndex("idx_status", false, "status", "")
-	col.AddIndex("idx_ais_id", true, "ais_id", "")
-	col.AddIndex("idx_next_attempt", false, "next_attempt", "")
-	return s.app.Save(col)
+		&core.DateField{Name: "created"},
+		&core.DateField{Name: "updated"},
+	}
+
+	modified := false
+	for _, rf := range requiredFields {
+		if col.Fields.GetByName(rf.GetName()) == nil {
+			log.Info().Str("field", rf.GetName()).Msg("Adding missing field to collection")
+			col.Fields.Add(rf)
+			modified = true
+		}
+	}
+
+	// Проверка и добавление индексов
+	indexes := []struct {
+		name   string
+		unique bool
+		cols   string
+	}{
+		{"idx_status", false, "status"},
+		{"idx_ais_id", true, "ais_id"},
+		{"idx_next_attempt", false, "next_attempt"},
+	}
+
+	for _, idx := range indexes {
+		exists := false
+		for _, existingIdx := range col.Indexes {
+			// В PocketBase v0.35 индексы проверяются по строковому представлению или имени
+			if existingIdx == idx.name {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			log.Info().Str("index", idx.name).Msg("Adding missing index to collection")
+			col.AddIndex(idx.name, idx.unique, idx.cols, "")
+			modified = true
+		}
+	}
+
+	if modified || col.Id == "" {
+		return s.app.Save(col)
+	}
+
+	return nil
 }
 
 func (s *Service) Push(req models.AISRequest) error {
@@ -92,7 +137,18 @@ func (s *Service) Push(req models.AISRequest) error {
 	record.Set("payload", req.Data)
 	record.Set("status", "pending")
 	
-	return s.app.Save(record)
+	if err := s.app.Save(record); err != nil {
+		return err
+	}
+
+	// Уведомляем диспетчер о новой записи
+	select {
+	case s.notify <- struct{}{}:
+	default:
+		// Канал полон, диспетчер и так проснется
+	}
+
+	return nil
 }
 
 func (s *Service) StartBackgroundWorker(ctx context.Context) {
@@ -114,22 +170,38 @@ func (s *Service) Wait() {
 
 func (s *Service) dispatcher(ctx context.Context) {
 	defer s.wg.Done()
-	log.Info().Msg("Started DB Dispatcher")
-	ticker := time.NewTicker(1 * time.Second)
+	log.Info().Msg("Started DB Dispatcher (Event-driven)")
+	
+	// Таймер теперь может быть реже (например, 5 сек), 
+	// так как новые записи будят диспетчер через s.notify
+	ticker := time.NewTicker(5 * time.Second)
 	defer ticker.Stop()
+
+	// Первичный запуск
+	s.fetchAndDispatch()
 
 	for {
 		select {
 		case <-ctx.Done():
 			log.Info().Msg("Dispatcher stopping...")
 			return
+		case <-s.notify:
+			// Проснулись по сигналу о новой записи
+			if count := s.fetchAndDispatch(); count >= s.cfg.BatchSize {
+				// Если пачка была полной, возможно там есть еще - проверяем сразу
+				select {
+				case s.notify <- struct{}{}:
+				default:
+				}
+			}
 		case <-ticker.C:
+			// Проснулись по времени (для повторов)
 			s.fetchAndDispatch()
 		}
 	}
 }
 
-func (s *Service) fetchAndDispatch() {
+func (s *Service) fetchAndDispatch() int {
 	// Считаем глубину очереди (ожидающие + повторы)
 	totalPending, _ := s.app.CountRecords(CollectionQueue, dbx.NewExp("status = 'pending' OR status = 'retry'"))
 	metrics.QueueDepth.Set(float64(totalPending))
@@ -147,14 +219,15 @@ func (s *Service) fetchAndDispatch() {
 	)
 	if err != nil {
 		log.Error().Err(err).Msg("Dispatcher failed to fetch records")
-		return
+		return 0
 	}
 
-	if len(records) == 0 {
-		return
+	count := len(records)
+	if count == 0 {
+		return 0
 	}
 
-	log.Debug().Int("count", len(records)).Msg("Dispatcher found tasks")
+	log.Debug().Int("count", count).Msg("Dispatcher found tasks")
 
 	for _, record := range records {
 		record.Set("status", "processing")
@@ -164,6 +237,7 @@ func (s *Service) fetchAndDispatch() {
 		}
 		s.jobs <- record
 	}
+	return count
 }
 
 func (s *Service) worker(ctx context.Context, id int) {

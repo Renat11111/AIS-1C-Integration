@@ -89,7 +89,7 @@ func main() {
 		e.Router.POST("/api/v1/data", apiHandler)
 		e.Router.PUT("/api/v1/data", apiHandler)
 		e.Router.DELETE("/api/v1/data", apiHandler)
-		e.Router.GET("/api/health", func(evt *core.RequestEvent) error {
+		e.Router.GET("/api/v1/health", func(evt *core.RequestEvent) error {
 			restHandler.HealthCheck(evt.Response, evt.Request)
 			return nil
 		})
@@ -113,10 +113,12 @@ func main() {
 		fmt.Printf("  📦 Version: %s (Commit: %s)\n", config.Version, config.CommitSHA)
 		fmt.Println("=====================================================\033[0m")
 		fmt.Printf("  \033[1;34m➜ API:\033[0m      http://127.0.0.1:8081/api/v1/data\n")
-		fmt.Printf("  \033[1;34m➜ Health:\033[0m   http://127.0.0.1:8081/api/health\n")
+		fmt.Printf("  \033[1;34m➜ Health:\033[0m   http://127.0.0.1:8081/api/v1/health\n")
 		fmt.Printf("  \033[1;34m➜ Admin UI:\033[0m http://127.0.0.1:8081/_/\n")
 		fmt.Printf("  \033[1;34m➜ Swagger:\033[0m  http://127.0.0.1:8081/swagger/index.html\n")
 		fmt.Printf("  \033[1;34m➜ Metrics:\033[0m  http://127.0.0.1:8081/metrics\n")
+		fmt.Printf("  \033[1;34m➜ Grafana:\033[0m  http://localhost:3000 (admin/admin)\n")
+		fmt.Printf("  \033[1;34m➜ Prometheus:\033[0m http://localhost:9090\n")
 		fmt.Println("\033[1;32m=====================================================\033[0m\n")
 		
 		return e.Next()

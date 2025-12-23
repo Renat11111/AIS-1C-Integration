@@ -191,19 +191,6 @@ info:
   title: AIS-1C Integration Proxy API
   version: "1.0"
 paths:
-  /health:
-    get:
-      description: Проверяет доступность сервиса
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.APIResponse'
-      summary: Health Check
-      tags:
-      - System
   /v1/data:
     delete:
       consumes:
@@ -319,4 +306,17 @@ paths:
       summary: Прием данных (Sale/Update/Delete)
       tags:
       - Integration
+  /v1/health:
+    get:
+      description: Проверяет доступность сервиса
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      summary: Health Check
+      tags:
+      - System
 swagger: "2.0"

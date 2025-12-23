@@ -84,7 +84,7 @@ func (h *Handler) ReceiveData(w http.ResponseWriter, r *http.Request) {
 // @Tags         System
 // @Produce      json
 // @Success      200  {object}  models.APIResponse
-// @Router       /health [get]
+// @Router       /v1/health [get]
 func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{

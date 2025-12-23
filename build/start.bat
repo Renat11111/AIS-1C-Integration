@@ -30,12 +30,14 @@ echo =====================================================
 echo   AIS-1C INTEGRATION SERVICE IS RUNNING
 echo =====================================================
 echo   API:      http://127.0.0.1:8081/api/v1/data
+echo   Health:   http://127.0.0.1:8081/api/v1/health
 echo   Admin UI: http://127.0.0.1:8081/_/
 echo   Swagger:  http://127.0.0.1:8081/swagger/index.html
 echo.
 if exist "monitoring\grafana" (
     echo   MONITORING:
     echo   Grafana:    http://localhost:3000 (admin/admin)
+    echo   Prometheus: http://localhost:9090
 )
 echo =====================================================
 echo.
