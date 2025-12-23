@@ -86,9 +86,16 @@ func main() {
 			return nil
 		}
 
+		retryHandler := func(evt *core.RequestEvent) error {
+			legacyAuthMw(http.HandlerFunc(restHandler.RetryFailedTasks)).ServeHTTP(evt.Response, evt.Request)
+			return nil
+		}
+
 		e.Router.POST("/api/v1/data", apiHandler)
 		e.Router.PUT("/api/v1/data", apiHandler)
 		e.Router.DELETE("/api/v1/data", apiHandler)
+		e.Router.POST("/api/v1/queue/retry-failed", retryHandler) // Используем apiHandler так как он содержит Auth + RetryLogic
+
 		e.Router.GET("/api/v1/health", func(evt *core.RequestEvent) error {
 			restHandler.HealthCheck(evt.Response, evt.Request)
 			return nil

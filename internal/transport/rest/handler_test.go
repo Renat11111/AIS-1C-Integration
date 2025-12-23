@@ -56,7 +56,6 @@ func TestReceiveData_Success(t *testing.T) {
 
 	reqBody := models.AISRequest{
 		ID:     "test-msg-001",
-		Type:   "sale",
 		Method: "POST",
 		Data: models.AISDocument{
 			SaleId: "sale-123",

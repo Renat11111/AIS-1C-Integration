@@ -20,21 +20,15 @@ func (r *AISRequest) Validate(httpMethod string) error {
 		return errors.New("missing 'id' field (envelope ID)")
 	}
 
-	// Для PUT (Update) и DELETE (Cancel) обязателен ID продажи
-	if (httpMethod == http.MethodPut || httpMethod == http.MethodDelete) && r.Data.SaleId == "" {
-		return errors.New("missing 'data.SaleId' for " + httpMethod + " operation")
+	// Общая проверка на наличие SaleId (для POST/PUT/DELETE)
+	if r.Data.SaleId == nil || r.Data.SaleId == "" {
+		return errors.New("missing 'data.SaleId'")
 	}
 
 	// Специфичная валидация для ОТМЕНЫ (DELETE)
 	if httpMethod == http.MethodDelete {
-		if r.Data.SaleDate == "" {
-			return errors.New("cancellation requires 'data.SaleDate'")
-		}
-		if r.Data.UserId == "" {
-			return errors.New("cancellation requires 'data.UserId' (who cancelled)")
-		}
-		if r.Data.SaleComment == "" {
-			return errors.New("cancellation requires 'data.SaleComment' (reason)")
+		if r.Data.SalePayStatusId == nil || r.Data.SalePayStatusId == "" {
+			return errors.New("cancellation requires 'data.SalePayStatusId'")
 		}
 	}
 
@@ -61,13 +55,13 @@ type SaleDetail struct {
 // AISDocument - Основная структура.
 type AISDocument struct {
 	// --- Sale Fields ---
-	SaleId            string  `json:"SaleId"`
-	SaleClientId      string  `json:"SaleClientId"`
-	SalePrecinctId    string  `json:"SalePrecinctId"`
-	SaleInspectorId   string  `json:"SaleInspectorId"`
+	SaleId            interface{} `json:"SaleId"`
+	SaleClientId      string      `json:"SaleClientId"`
+	SalePrecinctId    string      `json:"SalePrecinctId"`
+	SaleInspectorId   string      `json:"SaleInspectorId"`
 	
 	// Enum: 1=NotPaid, 2=Paid, 3=Partial, 4=Cancelled, 5=Pending, 6=Return, etc.
-	SalePayStatusId   string  `json:"SalePayStatusId"` 
+	SalePayStatusId   interface{} `json:"SalePayStatusId"` 
 	
 	SaleDate          string  `json:"SaleDate"` // Format: ISO8601 or YYYY-MM-DD HH:mm:ss
 	SaleDeclarationNo string  `json:"SaleDeclarationNo"`
@@ -145,7 +139,8 @@ type AISDocument struct {
 
 // APIResponse structure.
 type APIResponse struct {
-	Success bool   `json:"success"`
-	Message string `json:"message,omitempty"`
-	Error   string `json:"error,omitempty"`
+	Success bool        `json:"success"`
+	Message string      `json:"message,omitempty"`
+	Error   string      `json:"error,omitempty"`
+	Data    interface{} `json:"data,omitempty"`
 }

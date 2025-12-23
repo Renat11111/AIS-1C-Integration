@@ -81,29 +81,34 @@ go run cmd/api/main.go
 
 ## 💻 API Интерфейсы
 
-| Сервис | Адрес | Описание |
-| :--- | :--- | :--- |
-| **Data Endpoint** | `POST http://localhost:8081/api/v1/data` | Основной метод приема данных (Продажи, Возвраты) |
-| **Swagger UI** | `http://localhost:8081/swagger/index.html` | Интерактивная документация API |
-| **Admin UI** | `http://localhost:8081/_/` | Панель управления PocketBase (просмотр очереди) |
-| **Metrics** | `http://localhost:8081/metrics` | Метрики для Prometheus |
+| Сервис | Адрес | Метод | Описание |
+| :--- | :--- | :--- | :--- |
+| **Data Endpoint** | `/api/v1/data` | **POST** | Прием данных (Продажи и Обновления) |
+| **Cancel Endpoint** | `/api/v1/data` | **DELETE** | Отмена продажи (SaleId + Status) |
+| **Swagger UI** | `/swagger/index.html` | GET | Интерактивная документация |
+| **Admin UI** | `/_/` | GET | Панель управления очередью |
 
-### Пример запроса (cURL)
-
-```bash
-curl -X POST "http://localhost:8081/api/v1/data" \
-     -H "Content-Type: application/json" \
-     -H "X-API-Key: your_secret_token_here" \
-     -d 
+### Пример: Продажа (POST)
+```json
 {
-           "id": "req-12345",
-           "method": "sale",
-           "data": {
-             "sale_id": "SALE-001",
-             "date": "2025-12-22T10:00:00Z",
-             "sum": 1500.00
-           }
-         }
+  "id": "req-unique-uuid",
+  "data": {
+    "SaleId": 12345,
+    "SaleMainAmount": 150.50,
+    "SaleDetails": [...]
+  }
+}
+```
+
+### Пример: Отмена (DELETE)
+```json
+{
+  "id": "req-cancel-uuid",
+  "data": {
+    "SaleId": 12345,
+    "SalePayStatusId": 4
+  }
+}
 ```
 
 ---

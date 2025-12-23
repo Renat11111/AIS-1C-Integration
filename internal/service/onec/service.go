@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -28,6 +29,18 @@ const (
 	ChannelBuffer     = 100
 	MaxRetries        = 10               // Максимум попыток перед перемещением в DLQ (failed)
 	BaseRetryInterval = 1 * time.Minute // Начальный интервал повтора
+	
+	// Circuit Breaker Config
+	CBFailureThreshold = 5                // Сколько ошибок подряд до размыкания
+	CBOpenDuration     = 30 * time.Second // Сколько ждать перед попыткой восстановления
+)
+
+type CBState int
+
+const (
+	StateClosed CBState = iota
+	StateOpen
+	StateHalfOpen
 )
 
 type Service struct {
@@ -35,9 +48,15 @@ type Service struct {
 	cfg     *config.Config
 	client  *http.Client
 	bufPool sync.Pool
-	jobs    chan *core.Record
-	notify  chan struct{} // Канал для пробуждения диспетчера
+	jobs    chan []*core.Record // Теперь передаем пачки записей
+	notify  chan struct{}        // Канал для пробуждения диспетчера
 	wg      sync.WaitGroup
+
+	// Circuit Breaker State
+	cbState     CBState
+	cbFailures  int
+	cbLastRetry time.Time
+	cbMu        sync.RWMutex
 }
 
 func NewService(app *pocketbase.PocketBase, cfg *config.Config) *Service {
@@ -47,15 +66,49 @@ func NewService(app *pocketbase.PocketBase, cfg *config.Config) *Service {
 		client: &http.Client{Timeout: cfg.OneCTimeout},
 		bufPool: sync.Pool{
 			New: func() interface{} {
-				return bytes.NewBuffer(make([]byte, 0, 4096))
+				return bytes.NewBuffer(make([]byte, 0, 4096*10)) // Пул побольше для батчей
 			},
 		},
-		jobs:   make(chan *core.Record, ChannelBuffer),
-		notify: make(chan struct{}, 1), // Буферизованный канал, чтобы не блокировать Push
+		jobs:    make(chan []*core.Record, ChannelBuffer),
+		notify:  make(chan struct{}, 1),
+		cbState: StateClosed,
+	}
+}
+
+func (s *Service) getCBState() CBState {
+// ... (оставляем без изменений)
+ s.cbMu.RLock()
+	defer s.cbMu.RUnlock()
+
+	if s.cbState == StateOpen {
+		if time.Since(s.cbLastRetry) > CBOpenDuration {
+			return StateHalfOpen
+		}
+	}
+	return s.cbState
+}
+
+func (s *Service) recordCBSuccess() {
+	s.cbMu.Lock()
+	defer s.cbMu.Unlock()
+	s.cbState = StateClosed
+	s.cbFailures = 0
+	log.Info().Msg("🛡️ Circuit Breaker: CLOSED (System restored)")
+}
+
+func (s *Service) recordCBFailure() {
+	s.cbMu.Lock()
+	defer s.cbMu.Unlock()
+	s.cbFailures++
+	if s.cbFailures >= CBFailureThreshold && s.cbState != StateOpen {
+		s.cbState = StateOpen
+		s.cbLastRetry = time.Now()
+		log.Warn().Int("failures", s.cbFailures).Msg("🛡️ Circuit Breaker: OPEN (1C is down, pausing requests)")
 	}
 }
 
 func (s *Service) EnsureQueueCollection() error {
+// ... (оставляем без изменений)
 	col, err := s.app.FindCollectionByNameOrId(CollectionQueue)
 	if err != nil {
 		log.Info().Msg("Bootstrap: Creating 'integration_queue' collection...")
@@ -229,14 +282,18 @@ func (s *Service) fetchAndDispatch() int {
 
 	log.Debug().Int("count", count).Msg("Dispatcher found tasks")
 
+	// Блокируем всю пачку сразу
 	for _, record := range records {
 		record.Set("status", "processing")
 		if err := s.app.Save(record); err != nil {
 			log.Error().Err(err).Str("id", record.Id).Msg("Failed to lock record")
 			continue
 		}
-		s.jobs <- record
 	}
+
+	// Отправляем всю пачку в канал как ОДНУ задачу для воркера
+	s.jobs <- records
+	
 	return count
 }
 
@@ -247,56 +304,93 @@ func (s *Service) worker(ctx context.Context, id int) {
 		case <-ctx.Done():
 			log.Debug().Int("worker_id", id).Msg("Worker stopping...")
 			return
-		case record := <-s.jobs:
-			s.processRecord(ctx, id, record)
+		case records := <-s.jobs:
+			s.processBatch(ctx, id, records)
 		}
 	}
 }
 
-func (s *Service) processRecord(ctx context.Context, workerID int, record *core.Record) {
+func (s *Service) processBatch(ctx context.Context, workerID int, records []*core.Record) {
+	if len(records) == 0 {
+		return
+	}
+
 	timer := prometheus.NewTimer(metrics.WorkerDuration)
 	defer timer.ObserveDuration()
 
+	// 1. Проверяем состояние Circuit Breaker
+	state := s.getCBState()
+	if state == StateOpen {
+		log.Debug().Int("batch_size", len(records)).Msg("🛡️ Circuit Breaker is OPEN. Skipping batch.")
+		for _, r := range records {
+			s.handleError(r, fmt.Errorf("circuit breaker is open"), false)
+		}
+		return
+	}
+
+	// 2. Подготавливаем данные (используем пул буферов)
 	buf := s.bufPool.Get().(*bytes.Buffer)
 	buf.Reset()
 	defer s.bufPool.Put(buf)
 
-	var data models.AISDocument
-	
-	if err := json.NewEncoder(buf).Encode(record.Get("payload")); err != nil {
-		log.Error().Err(err).Str("record_id", record.Id).Msg("Failed to encode payload")
-		s.handleError(record, fmt.Errorf("payload encode error: %w", err), true)
+	batchRequests := make([]models.AISRequest, 0, len(records))
+	for _, record := range records {
+		var payloadData models.AISDocument
+		
+		// Очищаем буфер для каждой записи в батче
+		buf.Reset()
+		
+		// Кодируем payload из записи в буфер
+		if err := json.NewEncoder(buf).Encode(record.Get("payload")); err != nil {
+			log.Error().Err(err).Str("record_id", record.Id).Msg("Failed to encode payload in batch")
+			s.handleError(record, err, true)
+			continue
+		}
+
+		// Декодируем из буфера в структуру
+		if err := json.NewDecoder(buf).Decode(&payloadData); err != nil {
+			log.Error().Err(err).Str("record_id", record.Id).Msg("Failed to decode payload in batch")
+			s.handleError(record, err, true)
+			continue
+		}
+
+		batchRequests = append(batchRequests, models.AISRequest{
+			ID:     record.GetString("ais_id"),
+			Method: record.GetString("method"),
+			Data:   payloadData,
+		})
+	}
+
+	if len(batchRequests) == 0 {
 		return
 	}
 
-	if err := json.NewDecoder(buf).Decode(&data); err != nil {
-		log.Error().Err(err).Str("record_id", record.Id).Msg("Failed to decode payload")
-		s.handleError(record, fmt.Errorf("payload decode error: %w", err), true)
-		return
-	}
+	// Для логов берем SaleId первой записи
+	firstSaleID := fmt.Sprintf("%v", batchRequests[0].Data.SaleId)
+	log.Info().Int("worker", workerID).Int("batch_size", len(batchRequests)).Str("first_sale_id", firstSaleID).Msg("🚀 Processing batch")
 
-	req := models.AISRequest{
-		ID:     record.GetString("ais_id"),
-		Method: record.GetString("method"),
-		Data:   data,
-	}
-
-	log.Info().Int("worker", workerID).Str("method", req.Method).Str("sale_id", req.Data.SaleId).Msg("Processing")
-
-	err := s.sendToOneC(ctx, req)
+	// 3. Отправляем ПАКЕТ в 1С
+	err := s.sendBatchToOneC(ctx, batchRequests)
 
 	if err != nil {
-		log.Error().Err(err).Str("sale_id", req.Data.SaleId).Msg("Worker failed sync")
-		s.handleError(record, err, false)
-		metrics.ProcessedTotal.WithLabelValues("error", req.Method).Inc()
+		log.Error().Err(err).Int("batch_size", len(batchRequests)).Msg("❌ Batch sync failed")
+		s.recordCBFailure()
+		for _, r := range records {
+			s.handleError(r, err, false)
+			metrics.ProcessedTotal.WithLabelValues("error", "batch").Inc()
+		}
 	} else {
-		log.Info().Str("sale_id", req.Data.SaleId).Msg("Worker synced success. Deleting.")
-		s.app.Delete(record)
-		metrics.ProcessedTotal.WithLabelValues("success", req.Method).Inc()
+		log.Info().Int("batch_size", len(batchRequests)).Msg("✅ Batch sync success")
+		s.recordCBSuccess()
+		for _, r := range records {
+			s.app.Delete(r)
+			metrics.ProcessedTotal.WithLabelValues("success", "batch").Inc()
+		}
 	}
 }
 
 func (s *Service) handleError(record *core.Record, err error, fatal bool) {
+// ... (оставляем без изменений)
 	record.Set("error_log", err.Error())
 	
 	if fatal {
@@ -331,9 +425,58 @@ func (s *Service) handleError(record *core.Record, err error, fatal bool) {
 	s.app.Save(record)
 }
 
-func (s *Service) sendToOneC(ctx context.Context, req models.AISRequest) error {
-	_ = fmt.Sprintf("%s", req.ID)
+// RetryFailedTasks переводит все записи из статуса failed в pending
+func (s *Service) RetryFailedTasks() (int, error) {
+	records, err := s.app.FindRecordsByFilter(
+		CollectionQueue,
+		"status = 'failed'",
+		"created",
+		0, // 0 = все записи
+		0,
+		nil,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	count := len(records)
+	if count == 0 {
+		return 0, nil
+	}
+
+	for _, record := range records {
+		record.Set("status", "pending")
+		record.Set("retry_count", 0)
+		record.Set("error_log", "")
+		record.Set("next_attempt", nil)
+		if err := s.app.Save(record); err != nil {
+			log.Error().Err(err).Str("id", record.Id).Msg("Failed to reset failed record")
+		}
+	}
+
+	// Будим диспетчер
+	select {
+	case s.notify <- struct{}{}:
+	default:
+	}
+
+	log.Info().Int("count", count).Msg("🔄 DLQ: Resetting failed tasks to pending")
+	return count, nil
+}
+
+func (s *Service) sendBatchToOneC(ctx context.Context, requests []models.AISRequest) error {
+	// В будущем здесь будет использоваться backoff для повторных попыток на уровне HTTP
 	_ = backoff.NewExponentialBackOff()
-	time.Sleep(300 * time.Millisecond)
+
+	// Имитируем сетевую задержку на обработку пакета
+	time.Sleep(500 * time.Millisecond)
+	
+	// Тестовая логика: если хотя бы в одном ID есть "fail", весь батч падает
+	for _, req := range requests {
+		if strings.Contains(req.ID, "fail") {
+			return fmt.Errorf("1C Batch Error: request %s failed (Simulated)", req.ID)
+		}
+	}
+	
 	return nil
 }

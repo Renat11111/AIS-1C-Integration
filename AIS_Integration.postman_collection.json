@@ -2,19 +2,18 @@
 	"info": {
 		"_postman_id": "b6a7b8c9-d0e1-4f2a-9b3c-5d6e7f8a9b0c",
 		"name": "AIS-1C Integration",
-		"description": "Тестовая коллекция для проверки сервиса интеграции AIS -> 1C",
+		"description": "Упрощенная коллекция для интеграции AIS -> 1C",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
 		{
-			"name": "1. Create Sale (POST)",
+			"name": "1. Create or Update Sale (POST)",
 			"event": [
 				{
 					"listen": "prerequest",
 					"script": {
 						"exec": [
-							"pm.variables.set(\"msgId\", \"msg-\" + Math.random().toString(36).substring(7));",
-							"pm.variables.set(\"timestamp\", Math.floor(Date.now() / 1000));"
+							"pm.variables.set(\"msgId\", \"msg-\" + Math.random().toString(36).substring(7));"
 						],
 						"type": "text/javascript"
 					}
@@ -31,7 +30,7 @@
 				],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n    \"id\": \"{{msgId}}\",\n    \"method\": \"sale\",\n    \"timestamp\": {{timestamp}},\n    \"data\": {\n        \"SaleId\": \"SALE-ORDER-001\",\n        \"SaleDate\": \"2023-12-22T12:00:00Z\",\n        \"SaleInspectorId\": \"INSP-99\",\n        \"SaleMainAmount\": 1500.50,\n        \"SaleVatAmount\": 270.09,\n        \"SaleDetails\": [\n            {\n                \"SaleDetailId\": \"DET-001\",\n                \"SaleDetailPrice\": 500.00,\n                \"SaleDetailQuantity\": 2,\n                \"SaleDetailTotalAmount\": 1000.00,\n                \"ServiceName\": \"Consulting Service\"\n            },\n            {\n                \"SaleDetailId\": \"DET-002\",\n                \"SaleDetailPrice\": 250.25,\n                \"SaleDetailQuantity\": 2,\n                \"SaleDetailTotalAmount\": 500.50,\n                \"ServiceName\": \"Delivery\"\n            }\n        ],\n        \"ClientId\": \"CLIENT-777\",\n        \"ClientFullName\": \"OOO 'Test Company'\",\n        \"ClientVOENOrPassportNo\": \"1234567890\",\n        \"ClientPhone\": \"+994501234567\"\n    }\n}",
+					"raw": "{\n    \"id\": \"{{msgId}}\",\n    \"data\": {\n        \"SaleId\": 12345,\n        \"SaleDate\": \"2023-12-22T12:00:00Z\",\n        \"SaleMainAmount\": 1500.50,\n        \"SaleDetails\": [],\n        \"ClientId\": \"CLIENT-777\",\n        \"ClientFullName\": \"OOO 'Test Company'\"\n    }\n}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -53,60 +52,13 @@
 			"response": []
 		},
 		{
-			"name": "2. Update Sale (PUT)",
+			"name": "2. Cancel Sale (DELETE)",
 			"event": [
 				{
 					"listen": "prerequest",
 					"script": {
 						"exec": [
-							"pm.variables.set(\"msgId\", \"msg-\" + Math.random().toString(36).substring(7));",
-							"pm.variables.set(\"timestamp\", Math.floor(Date.now() / 1000));"
-						],
-						"type": "text/javascript"
-					}
-				}
-			],
-			"request": {
-				"method": "PUT",
-				"header": [
-					{
-						"key": "X-API-Key",
-						"value": "{{apiKey}}",
-						"type": "text"
-					}
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n    \"id\": \"{{msgId}}\",\n    \"method\": \"sale_update\",\n    \"timestamp\": {{timestamp}},\n    \"data\": {\n        \"SaleId\": \"SALE-ORDER-001\",\n        \"SaleComment\": \"Updated comment: Client paid via Bank Transfer\",\n        \"SalePayStatusId\": \"PAID\",\n        \"SalePayDate\": \"2023-12-23T09:30:00Z\"\n    }\n}",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
-				"url": {
-					"raw": "{{baseUrl}}/api/v1/data",
-					"host": [
-						"{{baseUrl}}"
-					],
-					"path": [
-						"api",
-						"v1",
-						"data"
-					]
-				}
-			},
-			"response": []
-		},
-		{
-			"name": "3. Delete Sale (DELETE)",
-			"event": [
-				{
-					"listen": "prerequest",
-					"script": {
-						"exec": [
-							"pm.variables.set(\"msgId\", \"msg-\" + Math.random().toString(36).substring(7));",
-							"pm.variables.set(\"timestamp\", Math.floor(Date.now() / 1000));"
+							"pm.variables.set(\"msgId\", \"msg-\" + Math.random().toString(36).substring(7));"
 						],
 						"type": "text/javascript"
 					}
@@ -123,7 +75,7 @@
 				],
 				"body": {
 					"mode": "raw",
-					"raw": "{\n    \"id\": \"{{msgId}}\",\n    \"method\": \"sale_cancellation\",\n    \"timestamp\": {{timestamp}},\n    \"data\": {\n        \"SaleId\": \"SALE-ORDER-001\",\n        \"SaleComment\": \"Order cancelled by client\"\n    }\n}",
+					"raw": "{\n    \"id\": \"{{msgId}}\",\n    \"data\": {\n        \"SaleId\": 12345,\n        \"SalePayStatusId\": 4\n    }\n}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -145,34 +97,44 @@
 			"response": []
 		},
 		{
-			"name": "4. Check Auth (Fail)",
+			"name": "3. Retry Failed Tasks (Admin)",
 			"request": {
 				"method": "POST",
 				"header": [
 					{
 						"key": "X-API-Key",
-						"value": "wrong-token",
+						"value": "{{apiKey}}",
 						"type": "text"
 					}
 				],
-				"body": {
-					"mode": "raw",
-					"raw": "{}",
-					"options": {
-						"raw": {
-							"language": "json"
-						}
-					}
-				},
 				"url": {
-					"raw": "{{baseUrl}}/api/v1/data",
+					"raw": "{{baseUrl}}/api/v1/queue/retry-failed",
 					"host": [
 						"{{baseUrl}}"
 					],
 					"path": [
 						"api",
 						"v1",
-						"data"
+						"queue",
+						"retry-failed"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "4. Health Check",
+			"request": {
+				"method": "GET",
+				"url": {
+					"raw": "{{baseUrl}}/api/v1/health",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"v1",
+						"health"
 					]
 				}
 			},

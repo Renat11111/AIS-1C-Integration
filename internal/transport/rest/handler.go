@@ -95,3 +95,31 @@ func (h *Handler) HealthCheck(w http.ResponseWriter, r *http.Request) {
 		"build_time": config.BuildTime,
 	})
 }
+
+// RetryFailedTasks перезапускает задачи со статусом failed
+// @Summary      Перезапуск упавших задач
+// @Description  Находит все задачи в статусе failed и возвращает их в очередь (статус pending)
+// @Tags         System
+// @Produce      json
+// @Param        X-API-Key header string true "API Key"
+// @Success      200  {object}  models.APIResponse
+// @Failure      500  {object}  models.APIResponse
+// @Router       /v1/queue/retry-failed [post]
+func (h *Handler) RetryFailedTasks(w http.ResponseWriter, r *http.Request) {
+	count, err := h.service.RetryFailedTasks()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(models.APIResponse{
+			Success: false,
+			Error:   "Failed to retry tasks: " + err.Error(),
+		})
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(models.APIResponse{
+		Success: true,
+		Message: "Successfully reset tasks",
+		Data:    map[string]int{"retried_count": count},
+	})
+}
