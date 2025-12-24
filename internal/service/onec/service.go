@@ -423,7 +423,13 @@ func (s *Service) processBatch(ctx context.Context, workerID int, records []*cor
 	}
 
 	// Для логов берем SaleId первой записи (теперь это json.Number или string)
-	log.Info().Int("worker", workerID).Int("batch_size", len(batchRequests)).Any("first_sale_id", batchRequests[0].Data.SaleId).Msg("🚀 Processing batch")
+	firstSaleId := batchRequests[0].Data.SaleId
+	log.Info().
+		Int("worker", workerID).
+		Int("batch_size", len(batchRequests)).
+		Any("first_sale_id_val", firstSaleId).
+		Str("first_sale_id_type", fmt.Sprintf("%T", firstSaleId)).
+		Msg("🚀 Processing batch")
 
 	// 3. Отправляем ПАКЕТ в 1С
 	err := s.sendBatchToOneC(ctx, batchRequests)

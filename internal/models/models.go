@@ -14,25 +14,41 @@ type AISRequest struct {
 }
 
 // Validate проверяет обязательные поля в зависимости от метода.
-// Если methodOverride не пуст, он используется вместо req.Method (полезно при переопределении из HTTP метода)
 func (r *AISRequest) Validate(httpMethod string) error {
 	if r.ID == "" {
 		return errors.New("missing 'id' field (envelope ID)")
 	}
 
-	// Общая проверка на наличие SaleId (для POST/PUT/DELETE)
-	if r.Data.SaleId == nil || r.Data.SaleId == "" {
-		return errors.New("missing 'data.SaleId'")
+	// Улучшенная проверка SaleId
+	if !isValidInterface(r.Data.SaleId) {
+		return errors.New("missing or invalid 'data.SaleId'")
 	}
 
 	// Специфичная валидация для ОТМЕНЫ (DELETE)
 	if httpMethod == http.MethodDelete {
-		if r.Data.SalePayStatusId == nil || r.Data.SalePayStatusId == "" {
+		if !isValidInterface(r.Data.SalePayStatusId) {
 			return errors.New("cancellation requires 'data.SalePayStatusId'")
 		}
 	}
 
 	return nil
+}
+
+// Вспомогательная функция для проверки interface{} на пустоту
+func isValidInterface(v interface{}) bool {
+	if v == nil {
+		return false
+	}
+	switch val := v.(type) {
+	case string:
+		return val != ""
+	case int, int64, float64:
+		// Для чисел считаем 0 тоже возможным ID, но обычно ID > 0. 
+		// Если нужно запретить 0, можно добавить проверку val != 0
+		return true
+	default:
+		return true
+	}
 }
 
 // SaleDetail - Детали продажи.

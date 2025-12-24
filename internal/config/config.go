@@ -18,6 +18,7 @@ var (
 )
 
 type Config struct {
+	ServerHost   string
 	ServerPort   string
 	AISToken     string
 	OneCBaseURL  string
@@ -53,7 +54,8 @@ func Load() *Config {
 	}
 
 	cfg := &Config{
-		ServerPort:   getEnv("SERVER_PORT", ":8081"),
+		ServerHost:   getEnv("SERVER_HOST", "127.0.0.1"),
+		ServerPort:   getEnv("SERVER_PORT", "8081"),
 		AISToken:     getEnv("AIS_TOKEN", ""),
 		OneCBaseURL:  getEnv("ONEC_BASE_URL", "http://localhost/base/hs/ais/v1/data"),
 		OneCUser:     getEnv("ONEC_USER", ""),

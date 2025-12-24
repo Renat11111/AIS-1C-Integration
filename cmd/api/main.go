@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
+	"strings"
 
 	"ais-1c-proxy/internal/config"
 	"ais-1c-proxy/internal/middleware"
@@ -116,21 +118,36 @@ func main() {
 		})
 
 		// ВЫВОД КРАСИВОГО БАННЕРА
+		serverAddr := fmt.Sprintf("%s:%s", cfg.ServerHost, cfg.ServerPort)
 		fmt.Println("\n\033[1;32m=====================================================")
 		fmt.Printf("  🚀 AIS-1C INTEGRATION SERVICE IS RUNNING\n")
 		fmt.Printf("  📦 Version: %s (Commit: %s)\n", config.Version, config.CommitSHA)
 		fmt.Println("=====================================================\033[0m")
-		fmt.Printf("  \033[1;34m➜ API:\033[0m      http://127.0.0.1:8081/api/v1/data\n")
-		fmt.Printf("  \033[1;34m➜ Health:\033[0m   http://127.0.0.1:8081/api/v1/health\n")
-		fmt.Printf("  \033[1;34m➜ Admin UI:\033[0m http://127.0.0.1:8081/_/\n")
-		fmt.Printf("  \033[1;34m➜ Swagger:\033[0m  http://127.0.0.1:8081/swagger/index.html\n")
-		fmt.Printf("  \033[1;34m➜ Metrics:\033[0m  http://127.0.0.1:8081/metrics\n")
+		fmt.Printf("  \033[1;34m➜ API:\033[0m      http://%s/api/v1/data\n", serverAddr)
+		fmt.Printf("  \033[1;34m➜ Health:\033[0m   http://%s/api/v1/health\n", serverAddr)
+		fmt.Printf("  \033[1;34m➜ Admin UI:\033[0m http://%s/_/\n", serverAddr)
+		fmt.Printf("  \033[1;34m➜ Swagger:\033[0m  http://%s/swagger/index.html\n", serverAddr)
+		fmt.Printf("  \033[1;34m➜ Metrics:\033[0m  http://%s/metrics\n", serverAddr)
 		fmt.Printf("  \033[1;34m➜ Grafana:\033[0m  http://localhost:3000 (admin/admin)\n")
 		fmt.Printf("  \033[1;34m➜ Prometheus:\033[0m http://localhost:9090\n")
 		fmt.Println("\033[1;32m=====================================================\033[0m\n")
 
 		return e.Next()
 	})
+
+	// Если в аргументах нет --http, добавляем его из конфига
+	hasHttp := false
+	for _, arg := range os.Args {
+		if strings.HasPrefix(arg, "--http") {
+			hasHttp = true
+			break
+		}
+	}
+
+	if !hasHttp {
+		addr := fmt.Sprintf("%s:%s", cfg.ServerHost, cfg.ServerPort)
+		os.Args = append(os.Args, "--http", addr)
+	}
 
 	if err := app.Start(); err != nil {
 		log.Fatal().Err(err).Msg("Failed to start application")

@@ -39,7 +39,9 @@ func (h *Handler) ReceiveData(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req models.AISRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	decoder := json.NewDecoder(r.Body)
+	decoder.UseNumber()
+	if err := decoder.Decode(&req); err != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(models.APIResponse{
 			Success: false,
